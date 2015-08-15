@@ -157,6 +157,7 @@ int iswap(int i) {
 
 unsigned char readbyte(int p) {
 	int *i=(int*)(p&~3);
+	if (p<0x20000000 || p>=0x60000000) return -1;
 	return *i>>((p&3)*8);
 }
 
@@ -339,7 +340,8 @@ void gdbstub_init() {
 	p[1]=0x00000002;
 
 	os_printf("Executing do_break\n");
-	do_break();
+	asm("break 0,0");
+//	do_break();
 	os_printf("Break done\n");
 }
 
