@@ -10,6 +10,7 @@
 #include "xtensa/corebits.h"
 #include "gdbstub-entry.h"
 
+#include "v7_gdb.h"
 
 //From xtruntime-frames.h
 struct XTensa_exception_frame_s {
@@ -19,6 +20,11 @@ struct XTensa_exception_frame_s {
 	uint32_t vpri;
 	uint32_t a0;
 	uint32_t a[14]; //a2..a15
+//These are added manually by the exception code; the HAL doesn't include these.
+	uint32_t litbase;
+	uint32_t sr176;
+	uint32_t sr208;
+	uint32_t a1;
 };
 
 
@@ -156,7 +162,7 @@ int iswap(int i) {
 }
 
 unsigned char readbyte(int p) {
-	int *i=(int*)(p&~3);
+	int *i=(int*)(p&(~3));
 	if (p<0x20000000 || p>=0x60000000) return -1;
 	return *i>>((p&3)*8);
 }
@@ -172,13 +178,13 @@ unsigned char readbyte(int p) {
  * https://github.com/jcmvbkbc/crosstool-NG/blob/lx106-g%2B%2B/overlays/xtensa_lx106.tar
  */
 struct regfile {
-  uint32_t a[16];
-  uint32_t pc;
-  uint32_t sar;
-  uint32_t litbase;
-  uint32_t sr176;
-  uint32_t sr208;
-  uint32_t ps;
+	uint32_t a[16];
+	uint32_t pc;
+	uint32_t sar;
+	uint32_t litbase;
+	uint32_t sr176;
+	uint32_t sr208;
+	uint32_t ps;
 };
 
 
@@ -189,17 +195,18 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 	if (cmd[0]=='g') {
 		gdbPacketStart();
 		gdbPacketHex(iswap(currFrame->a0), 32);
-		gdbPacketHex(iswap(currFrame->ps), 32);
+		gdbPacketHex(iswap(currFrame->a1), 32);
 		for (i=2; i<16; i++) gdbPacketHex(iswap(currFrame->a[i]), 32);
 		gdbPacketHex(iswap(currFrame->pc), 32);
 		gdbPacketHex(iswap(currFrame->sar), 32);
-		gdbPacketHex(0, 32);
-		gdbPacketHex(0, 32);
+		gdbPacketHex(iswap(currFrame->litbase), 32);
+		gdbPacketHex(iswap(currFrame->sr176), 32);
 		gdbPacketHex(0, 32);
 		gdbPacketHex(iswap(currFrame->ps), 32);
 		gdbPacketEnd();
 	} else if (cmd[0]=='G') {
 		//ToDo
+/*
 	} else if (cmd[0]=='p') {
 		i=gdbGetHexVal(&data, 2);
 		gdbPacketStart();
@@ -213,6 +220,7 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		if (i==20) gdbPacketHex(0, 32);
 		if (i==21) gdbPacketHex(iswap(currFrame->ps), 32);
 		gdbPacketEnd();
+*/
 	} else if (cmd[0]=='m') {
 		i=gdbGetHexVal(&data, -1);
 		data++;
@@ -228,6 +236,8 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		gdbPacketChar('S');
 		gdbPacketHex(1, 8); //ToDo: figure out better reason, maybe link to exception
 		gdbPacketEnd();
+	} else if (cmd[0]=='c') {
+		return ST_CONT;
 	} else {
 		gdbPacketStart();
 		gdbPacketEnd();
@@ -291,7 +301,7 @@ void gdb_semihost_putchar1() {
 
 }
 
-void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
+static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	os_printf("Exception\n");
 	ets_wdt_disable();
 	xthal_set_intenable(0);
@@ -320,27 +330,41 @@ static void install_exceptions() {
 
 extern int _DebugExceptionVector;
 
+void do_c_break() {
+	asm("break 0,0");
+}
+
+void do_c_exception() {
+	volatile char *e=(volatile char*)1;
+	*e=1;
+}
+
 void gdbstub_init() {
 	int *p=&_DebugExceptionVector;
 	currFrame=&savedRegs;
-	os_install_putc1(gdb_semihost_putchar1);
+#if 1
+//	os_install_putc1(gdb_semihost_putchar1);
 	
 //	ets_wdt_disable();
 //	xthal_set_intenable(0);
 //	while(1) gdbReadCommand();
-	install_exceptions();
-	os_printf("Pre init_debug_entry\n");
+//	install_exceptions();
+//	os_printf("Pre init_debug_entry\n");
 	init_debug_entry();
-	os_printf("Post init_debug_entry\n");
+//	os_printf("Post init_debug_entry\n");
 
 //This puts the following 2 instructions into the debug exception vector:
 //	xsr	a2, DEBUG_EXCSAVE
 //	jx	a2
 	p[0]=0xa061d220;
 	p[1]=0x00000002;
-
+#else
+#endif
+	gdb_init();
 	os_printf("Executing do_break\n");
-	asm("break 0,0");
+	do_break();
+	os_printf("Executing do_c_exception\n");
+	do_c_exception();
 //	do_break();
 	os_printf("Break done\n");
 }

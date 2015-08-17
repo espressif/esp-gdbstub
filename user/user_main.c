@@ -14,7 +14,6 @@
 #include "user_interface.h"
 #include "../gdbstub/gdbstub.h"
 
-
 void user_rf_pre_init(void)
 {
 }
