@@ -25,6 +25,7 @@ struct XTensa_exception_frame_s {
 	uint32_t sr176;
 	uint32_t sr208;
 	uint32_t a1;
+	uint32_t reason;
 };
 
 
@@ -47,7 +48,6 @@ extern void ets_wdt_disable(void);
 #define PBUFLEN 256
 
 static char chsum;
-static struct XTensa_exception_frame_s *currFrame;
 
 //The asm stub saves the Xtensa registers here when a debugging exception happens.
 struct XTensa_exception_frame_s savedRegs;
@@ -167,6 +167,15 @@ unsigned char readbyte(int p) {
 	return *i>>((p&3)*8);
 }
 
+void writeByte(int p, unsigned char d) {
+	int *i=(int*)(p&(~3));
+	if (p<0x20000000 || p>=0x60000000) return -1;
+	if ((p&3)==0) *i=(*i&0xffffff00)|(d<<0);
+	if ((p&3)==1) *i=(*i&0xffff00ff)|(d<<8);
+	if ((p&3)==2) *i=(*i&0xff00ffff)|(d<<16);
+	if ((p&3)==3) *i=(*i&0x00ffffff)|(d<<24);
+}
+
 // https://sourceware.org/gdb/onlinedocs/gdb/Overview.html#Overview
 // http://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=257B772D871748F229AC82590EE321F6?doi=10.1.1.464.1563&rep=rep1&type=pdf
 
@@ -188,39 +197,51 @@ struct regfile {
 };
 
 
+void sendReason() {
+	char *reason="break"; //default
+	int i=0;
+	ets_wdt_disable();
+	xthal_set_intenable(0);
+	gdbPacketStart();
+	gdbPacketChar('T');
+	gdbPacketHex(5, 8); //sigtrap
+#if 0
+	if (savedRegs.reason&(1<<0)) reason="break";
+	if (savedRegs.reason&(1<<1)) reason="hwbreak";
+	if (savedRegs.reason&(1<<2)) reason="watch";
+	if (savedRegs.reason&(1<<3)) reason="swbreak";
+	if (savedRegs.reason&(1<<4)) reason="swbreak";
+
+	while(reason[i]!=0) {
+		gdbPacketChar(reason[i]);
+		i++;
+	}
+	gdbPacketChar(':');
+#endif
+	//ToDo: watch: send address
+	gdbPacketEnd();
+}
+
+
+
 int gdbHandleCommand(unsigned char *cmd, int len) {
 	//Handle a command
 	int i, j, k;
 	unsigned char *data=cmd+1;
 	if (cmd[0]=='g') {
 		gdbPacketStart();
-		gdbPacketHex(iswap(currFrame->a0), 32);
-		gdbPacketHex(iswap(currFrame->a1), 32);
-		for (i=2; i<16; i++) gdbPacketHex(iswap(currFrame->a[i]), 32);
-		gdbPacketHex(iswap(currFrame->pc), 32);
-		gdbPacketHex(iswap(currFrame->sar), 32);
-		gdbPacketHex(iswap(currFrame->litbase), 32);
-		gdbPacketHex(iswap(currFrame->sr176), 32);
+		gdbPacketHex(iswap(savedRegs.a0), 32);
+		gdbPacketHex(iswap(savedRegs.a1), 32);
+		for (i=2; i<16; i++) gdbPacketHex(iswap(savedRegs.a[i]), 32);
+		gdbPacketHex(iswap(savedRegs.pc), 32);
+		gdbPacketHex(iswap(savedRegs.sar), 32);
+		gdbPacketHex(iswap(savedRegs.litbase), 32);
+		gdbPacketHex(iswap(savedRegs.sr176), 32);
 		gdbPacketHex(0, 32);
-		gdbPacketHex(iswap(currFrame->ps), 32);
+		gdbPacketHex(iswap(savedRegs.ps), 32);
 		gdbPacketEnd();
 	} else if (cmd[0]=='G') {
 		//ToDo
-/*
-	} else if (cmd[0]=='p') {
-		i=gdbGetHexVal(&data, 2);
-		gdbPacketStart();
-		if (i==0) gdbPacketHex(iswap(currFrame->a0), 32);
-		if (i==1) gdbPacketHex(iswap(currFrame->ps), 32);
-		if (i>=2 && i<16) gdbPacketHex(iswap(currFrame->a[i]), 32);
-		if (i==16) gdbPacketHex(iswap(currFrame->pc), 32);
-		if (i==17) gdbPacketHex(iswap(currFrame->sar), 32);
-		if (i==18) gdbPacketHex(0, 32);
-		if (i==19) gdbPacketHex(0, 32);
-		if (i==20) gdbPacketHex(0, 32);
-		if (i==21) gdbPacketHex(iswap(currFrame->ps), 32);
-		gdbPacketEnd();
-*/
 	} else if (cmd[0]=='m') {
 		i=gdbGetHexVal(&data, -1);
 		data++;
@@ -230,12 +251,22 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 			gdbPacketHex(readbyte(i++), 8);
 		}
 		gdbPacketEnd();
+	} else if (cmd[0]=='M') {
+		i=gdbGetHexVal(&data, -1); //addr
+		data++;
+		j=gdbGetHexVal(&data, -1); //length
+		data++;
+		for (k=0; k<j; k++) {
+			writeByte(i, gdbGetHexVal(&data, 2));
+			i++;
+		}
 	} else if (cmd[0]=='?') {
 		//Reply with stop reason
-		gdbPacketStart();
-		gdbPacketChar('S');
-		gdbPacketHex(1, 8); //ToDo: figure out better reason, maybe link to exception
-		gdbPacketEnd();
+		sendReason();
+//		gdbPacketStart();
+//		gdbPacketChar('S');
+//		gdbPacketHex(1, 8); //ToDo: figure out better reason, maybe link to exception type
+//		gdbPacketEnd();
 	} else if (cmd[0]=='c') {
 		return ST_CONT;
 	} else {
@@ -245,6 +276,7 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 	}
 	return ST_OK;
 }
+
 
 //Lower layer: grab a command packet and check the checksum
 //Calls gdbHandleCommand on the packet if the checksum is OK
@@ -296,42 +328,39 @@ int gdbReadCommand() {
 }
 
 
+void handle_debug_exception() {
+	sendReason();
+	while(gdbReadCommand()!=ST_CONT);
+}
+
+
+void handle_normal_exception() {
+	sendReason();
+	while(gdbReadCommand()!=ST_CONT);
+}
 
 void gdb_semihost_putchar1() {
 
 }
 
-static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
-	os_printf("Exception\n");
-	ets_wdt_disable();
-	xthal_set_intenable(0);
-	currFrame=frame;
-	while(gdbReadCommand()!=ST_CONT);
-//	currRegs.a[0]=frame->a0;
-//	currRegs.a[1]=
-}
+#define EXCEPTION_GDB_SP_OFFSET 0x100
 
-void handle_debug_exception() {
-//Does not work here somehow. Maybe an int thing?
-//	os_printf("Debug exception\n");
-	ets_wdt_disable();
-	xthal_set_intenable(0);
-	currFrame=&savedRegs;
+static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
+	save_extra_sfrs_for_exception();
+	os_memcpy(savedRegs, frame, 19*4);
+	//Credits go to Cesanta for this trick.
+	savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
+	
 	while(gdbReadCommand()!=ST_CONT);
+	os_memcpy(frame, savedRegs, 19*4);
 }
 
 static void install_exceptions() {
 	int i;
 	int exno[]={EXCCAUSE_ILLEGAL, EXCCAUSE_SYSCALL, EXCCAUSE_INSTR_ERROR, EXCCAUSE_LOAD_STORE_ERROR,
 			EXCCAUSE_DIVIDE_BY_ZERO, EXCCAUSE_UNALIGNED, EXCCAUSE_INSTR_DATA_ERROR, EXCCAUSE_LOAD_STORE_DATA_ERROR, 
-			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR};
+			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR, 29};
 	for (i=0; i<sizeof(exno)/sizeof(int); i++) _xtos_set_exception_handler(exno[i], gdb_exception_handler);
-}
-
-extern int _DebugExceptionVector;
-
-void do_c_break() {
-	asm("break 0,0");
 }
 
 void do_c_exception() {
@@ -340,32 +369,24 @@ void do_c_exception() {
 }
 
 void gdbstub_init() {
-	int *p=&_DebugExceptionVector;
-	currFrame=&savedRegs;
 #if 1
 //	os_install_putc1(gdb_semihost_putchar1);
 	
 //	ets_wdt_disable();
 //	xthal_set_intenable(0);
 //	while(1) gdbReadCommand();
-//	install_exceptions();
+	install_exceptions();
 //	os_printf("Pre init_debug_entry\n");
 	init_debug_entry();
 //	os_printf("Post init_debug_entry\n");
 
-//This puts the following 2 instructions into the debug exception vector:
-//	xsr	a2, DEBUG_EXCSAVE
-//	jx	a2
-	p[0]=0xa061d220;
-	p[1]=0x00000002;
 #else
-#endif
 	gdb_init();
+#endif
 	os_printf("Executing do_break\n");
-	do_break();
+//	do_break();
 	os_printf("Executing do_c_exception\n");
 	do_c_exception();
-//	do_break();
 	os_printf("Break done\n");
 }
 

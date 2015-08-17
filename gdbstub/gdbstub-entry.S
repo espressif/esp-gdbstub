@@ -31,6 +31,7 @@ doNotIncludeThis:
 	uint32_t sr176;
 	uint32_t sr208;
 	uint32_t a1;
+	uint32_t reason;
 */
 
 /*
@@ -69,6 +70,8 @@ DebugExceptionEntry:
 	s32i	a0, a2, 0x50
 	rsr		a0, 208
 	s32i	a0, a2, 0x54
+	rsr		a0, DEBUGCAUSE
+	s32i	a0, a2, 0x5C
 
 //Save DEBUG_PC, but if the instruction is at DO_BREAK, skip over the (fixed) break instruction so
 //we will not execute it again after returning.
@@ -90,11 +93,11 @@ is_not_do_break:
 
 DebugExceptionExit:
 
-
+/*
 	movi a2, 0x60000000
 	movi a3, 'X'
 	s32i a3,a2, 0
-
+*/
 
 	rsr	a2, ps
 	addi	a2, a2, PS_EXCM_MASK
@@ -136,7 +139,7 @@ DebugExceptionExit:
 	l32i	a1, a2, 0x58
 	l32i	a0, a2, 0x10
 
-	//Read back A2 value, put back address of this routine.
+	//Read back vector-saved a2 value, put back address of this routine.
 	movi	a2, DebugExceptionEntry
 	xsr	a2, DEBUG_EXCSAVE
 
@@ -145,12 +148,39 @@ DebugExceptionExit:
 
 
 
+	.global save_extra_sfrs_for_exception
+	.align 4
+//The Xtensa OS HAL does not save all the special function register things. This bit of assembly
+//fills the savedRegs struct with them.
+save_extra_sfrs_for_exception:
+	movi	a2, savedRegs
+	rsr		a0, LITBASE
+	s32i	a0, a2, 0x4C
+	rsr		a0, 176
+	s32i	a0, a2, 0x50
+	rsr		a0, 208
+	s32i	a0, a2, 0x54
+	rsr		a0, DEBUGCAUSE
+	s32i	a0, a2, 0x5C
+	ret
+
 	.global init_debug_entry
+	.global _DebugExceptionVector
 	.align	4
 init_debug_entry:
+//This puts the following 2 instructions into the debug exception vector:
+//	xsr	a2, DEBUG_EXCSAVE
+//	jx	a2
+	movi	a2, _DebugExceptionVector
+	movi	a3, 0xa061d220
+	s32i	a3, a2, 0
+	movi	a3, 0x00000002
+	s32i	a3, a2, 4
 
+//Tell the just-installed debug vector where to go.
 	movi	a2, DebugExceptionEntry
 	wsr		a2, DEBUG_EXCSAVE
+
 	ret
 
 
