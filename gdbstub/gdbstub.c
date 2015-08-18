@@ -91,6 +91,13 @@ void gdbPacketChar(char c) {
 	}
 }
 
+void gdbPacketStr(char *c) {
+	while (*c!=0) {
+		gdbPacketChar(*c);
+		c++;
+	}
+}
+
 void gdbPacketHex(int val, int bits) {
 	char hexChars[]="0123456789abcdef";
 	int i;
@@ -214,19 +221,17 @@ void sendReason() {
 		if (i<sizeof(exceptionSignal)) return gdbPacketHex(exceptionSignal[i], 8); else gdbPacketHex(11, 8);
 	} else {
 		gdbPacketHex(5, 8); //sigtrap
+//Current Xtensa GDB versions don't seem to request this, so let's leave it off.
 #if 0
 		if (savedRegs.reason&(1<<0)) reason="break";
 		if (savedRegs.reason&(1<<1)) reason="hwbreak";
 		if (savedRegs.reason&(1<<2)) reason="watch";
 		if (savedRegs.reason&(1<<3)) reason="swbreak";
 		if (savedRegs.reason&(1<<4)) reason="swbreak";
-	
-		while(reason[i]!=0) {
-			gdbPacketChar(reason[i]);
-			i++;
-		}
+
+		gdbPacketStr(reason);
 		gdbPacketChar(':');
-	//ToDo: watch: send address
+		//ToDo: watch: send address
 #endif
 	}
 	gdbPacketEnd();
@@ -279,6 +284,26 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 //		gdbPacketEnd();
 	} else if (cmd[0]=='c') {
 		return ST_CONT;
+	} else if (strncmp(cmd, "vCont", 5)==0) {
+		if (cmd[5]=='?') {
+			gdbPacketStart();
+			gdbPacketStr("vCont;c;s");
+			gdbPacketEnd();
+		} else if (cmd[5]=='c') {
+			return ST_CONT;
+		} else if (cmd[5]=='s') {
+			//ToDo: single step...
+		}
+	} else if (cmd[0]=='q') {
+		if (strncmp(&cmd[1], "Supported", 9)==0) {
+			gdbPacketStart();
+			gdbPacketStr("swbreak+;hwbreak+;PacketSize=255");
+			gdbPacketEnd();
+		} else {
+			gdbPacketStart();
+			gdbPacketEnd();
+			return ST_ERR;
+		}
 	} else {
 		gdbPacketStart();
 		gdbPacketEnd();
