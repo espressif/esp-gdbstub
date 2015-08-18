@@ -25,6 +25,8 @@ struct XTensa_exception_frame_s {
 	uint32_t sr176;
 	uint32_t sr208;
 	uint32_t a1;
+	 //'reason; is abused for both the debug and the exception vector: if bit 7 is set,
+	//this contains an exception reason, otherwise it contains a debug vector bitmap.
 	uint32_t reason;
 };
 
@@ -46,6 +48,7 @@ extern void ets_wdt_disable(void);
 #define UART_FIFO( i )                          (REG_UART_BASE( i ) + 0x0)
 
 #define PBUFLEN 256
+#define OBUFLEN 32
 
 static char chsum;
 
@@ -55,6 +58,8 @@ struct XTensa_exception_frame_s savedRegs;
 int exceptionStack[64];
 
 static unsigned char cmd[PBUFLEN];
+static unsigned char obuf[OBUFLEN];
+static int obufpos=0;
 
 static int ICACHE_FLASH_ATTR gdbRecvChar() {
 	int i;
@@ -198,27 +203,32 @@ struct regfile {
 
 
 void sendReason() {
-	char *reason="break"; //default
+	char *reason=""; //default
+	//exception-to-signal mapping
+	char exceptionSignal[]={4,31,11,11,2,6,8,0,6,7,0,0,7,7,7,7};
 	int i=0;
-	ets_wdt_disable();
-	xthal_set_intenable(0);
 	gdbPacketStart();
 	gdbPacketChar('T');
-	gdbPacketHex(5, 8); //sigtrap
+	if (savedRegs.reason&0x80) {
+		i=savedRegs.reason&0x7f;
+		if (i<sizeof(exceptionSignal)) return gdbPacketHex(exceptionSignal[i], 8); else gdbPacketHex(11, 8);
+	} else {
+		gdbPacketHex(5, 8); //sigtrap
 #if 0
-	if (savedRegs.reason&(1<<0)) reason="break";
-	if (savedRegs.reason&(1<<1)) reason="hwbreak";
-	if (savedRegs.reason&(1<<2)) reason="watch";
-	if (savedRegs.reason&(1<<3)) reason="swbreak";
-	if (savedRegs.reason&(1<<4)) reason="swbreak";
-
-	while(reason[i]!=0) {
-		gdbPacketChar(reason[i]);
-		i++;
-	}
-	gdbPacketChar(':');
-#endif
+		if (savedRegs.reason&(1<<0)) reason="break";
+		if (savedRegs.reason&(1<<1)) reason="hwbreak";
+		if (savedRegs.reason&(1<<2)) reason="watch";
+		if (savedRegs.reason&(1<<3)) reason="swbreak";
+		if (savedRegs.reason&(1<<4)) reason="swbreak";
+	
+		while(reason[i]!=0) {
+			gdbPacketChar(reason[i]);
+			i++;
+		}
+		gdbPacketChar(':');
 	//ToDo: watch: send address
+#endif
+	}
 	gdbPacketEnd();
 }
 
@@ -329,14 +339,25 @@ int gdbReadCommand() {
 
 
 void handle_debug_exception() {
+	xthal_set_intenable(0);
+	ets_wdt_disable();
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
+	ets_wdt_enable();
+	xthal_set_intenable(1);
 }
 
 
-
-void gdb_semihost_putchar1() {
-
+void gdb_semihost_putchar1(char c) {
+	int i;
+	obuf[obufpos++]=c;
+	if (c=='\n' || obufpos==OBUFLEN) {
+		gdbPacketStart();
+		gdbPacketChar('O');
+		for (i=0; i<obufpos; i++) gdbPacketHex(obuf[i], 8);
+		gdbPacketEnd();
+		obufpos=0;
+	}
 }
 
 #define EXCEPTION_GDB_SP_OFFSET 0x100
@@ -346,8 +367,15 @@ static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	os_memcpy(&savedRegs, frame, 19*4);
 	//Credits go to Cesanta for this trick.
 	savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
-	
+	savedRegs.reason|=0x80; //mark as an exception reason
+
+	xthal_set_intenable(0);
+	ets_wdt_disable();
+	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
+	ets_wdt_enable();
+	xthal_set_intenable(1);
+
 	os_memcpy(frame, &savedRegs, 19*4);
 }
 
@@ -370,7 +398,7 @@ void do_c_exception() {
 
 void gdbstub_init() {
 #if 1
-//	os_install_putc1(gdb_semihost_putchar1);
+	os_install_putc1(gdb_semihost_putchar1);
 	
 //	ets_wdt_disable();
 //	xthal_set_intenable(0);
@@ -384,6 +412,8 @@ void gdbstub_init() {
 	gdb_init();
 #endif
 	os_printf("Executing do_break\n");
+	do_break();
+	os_printf("Executing do_break again\n");
 	do_break();
 	os_printf("Executing do_c_exception\n");
 	do_c_exception();

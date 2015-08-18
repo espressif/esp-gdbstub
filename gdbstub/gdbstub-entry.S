@@ -75,24 +75,21 @@ DebugExceptionEntry:
 
 //Save DEBUG_PC, but if the instruction is at DO_BREAK, skip over the (fixed) break instruction so
 //we will not execute it again after returning.
-	rsr		a0, DEBUG_PC
-	movi	a1, do_break_breakpoint
-	bne		a0, a1, is_not_do_break
-	addi	a0, a0, 3
+	rsr		a4, DEBUG_PC
+	movi	a3, do_break_breakpoint
+	bne		a4, a3, is_not_do_break
+	addi	a4, a4, 3
 is_not_do_break:
-	s32i	a0, a2, 0x00
+	s32i	a4, a2, 0x00
+
+#ifdef GDBSTUB_USE_OWN_STACK
+	movi a1, exceptionStack+63*4
+#endif
 
 	rsr	a2, ps
 	addi	a2, a2, -PS_EXCM_MASK
 	wsr	a2, ps
 	rsync
-
-#ifdef GDBSTUB_USE_OWN_STACK
-	movi a1, exceptionStack+63*4
-#else
-	movi	a2, savedRegs
-	l32i	a1, a2, 0x58
-#endif
 
 	call0		handle_debug_exception
 
