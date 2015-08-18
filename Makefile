@@ -38,7 +38,7 @@ TARGET_LDFLAGS =		\
 	--text-section-literals
 
 ifeq ($(FLAVOR),debug)
-    TARGET_LDFLAGS += -g -Os
+    TARGET_LDFLAGS += -g -O0
 endif
 
 ifeq ($(FLAVOR),release)

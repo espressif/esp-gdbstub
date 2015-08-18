@@ -169,7 +169,7 @@ unsigned char readbyte(int p) {
 
 void writeByte(int p, unsigned char d) {
 	int *i=(int*)(p&(~3));
-	if (p<0x20000000 || p>=0x60000000) return -1;
+	if (p<0x20000000 || p>=0x60000000) return;
 	if ((p&3)==0) *i=(*i&0xffffff00)|(d<<0);
 	if ((p&3)==1) *i=(*i&0xffff00ff)|(d<<8);
 	if ((p&3)==2) *i=(*i&0xff00ffff)|(d<<16);
@@ -232,7 +232,7 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		gdbPacketStart();
 		gdbPacketHex(iswap(savedRegs.a0), 32);
 		gdbPacketHex(iswap(savedRegs.a1), 32);
-		for (i=2; i<16; i++) gdbPacketHex(iswap(savedRegs.a[i]), 32);
+		for (i=2; i<16; i++) gdbPacketHex(iswap(savedRegs.a[i-2]), 32);
 		gdbPacketHex(iswap(savedRegs.pc), 32);
 		gdbPacketHex(iswap(savedRegs.sar), 32);
 		gdbPacketHex(iswap(savedRegs.litbase), 32);
@@ -334,10 +334,6 @@ void handle_debug_exception() {
 }
 
 
-void handle_normal_exception() {
-	sendReason();
-	while(gdbReadCommand()!=ST_CONT);
-}
 
 void gdb_semihost_putchar1() {
 
@@ -347,20 +343,24 @@ void gdb_semihost_putchar1() {
 
 static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	save_extra_sfrs_for_exception();
-	os_memcpy(savedRegs, frame, 19*4);
+	os_memcpy(&savedRegs, frame, 19*4);
 	//Credits go to Cesanta for this trick.
 	savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
 	
 	while(gdbReadCommand()!=ST_CONT);
-	os_memcpy(frame, savedRegs, 19*4);
+	os_memcpy(frame, &savedRegs, 19*4);
 }
 
 static void install_exceptions() {
 	int i;
 	int exno[]={EXCCAUSE_ILLEGAL, EXCCAUSE_SYSCALL, EXCCAUSE_INSTR_ERROR, EXCCAUSE_LOAD_STORE_ERROR,
 			EXCCAUSE_DIVIDE_BY_ZERO, EXCCAUSE_UNALIGNED, EXCCAUSE_INSTR_DATA_ERROR, EXCCAUSE_LOAD_STORE_DATA_ERROR, 
-			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR, 29};
-	for (i=0; i<sizeof(exno)/sizeof(int); i++) _xtos_set_exception_handler(exno[i], gdb_exception_handler);
+			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR, EXCCAUSE_INSTR_PROHIBITED,
+			EXCCAUSE_LOAD_PROHIBITED, EXCCAUSE_STORE_PROHIBITED};
+
+	for (i=0; i<(sizeof(exno)/sizeof(exno[0])); i++) {
+		_xtos_set_exception_handler(exno[i], gdb_exception_handler);
+	}
 }
 
 void do_c_exception() {

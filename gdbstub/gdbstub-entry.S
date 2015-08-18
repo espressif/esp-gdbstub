@@ -154,14 +154,14 @@ DebugExceptionExit:
 //fills the savedRegs struct with them.
 save_extra_sfrs_for_exception:
 	movi	a2, savedRegs
-	rsr		a0, LITBASE
-	s32i	a0, a2, 0x4C
-	rsr		a0, 176
-	s32i	a0, a2, 0x50
-	rsr		a0, 208
-	s32i	a0, a2, 0x54
-	rsr		a0, DEBUGCAUSE
-	s32i	a0, a2, 0x5C
+	rsr		a3, LITBASE
+	s32i	a3, a2, 0x4C
+	rsr		a3, 176
+	s32i	a3, a2, 0x50
+	rsr		a3, 208
+	s32i	a3, a2, 0x54
+	rsr		a3, EXCCAUSE
+	s32i	a3, a2, 0x5C
 	ret
 
 	.global init_debug_entry
