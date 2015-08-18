@@ -384,7 +384,7 @@ void gdbstub_init() {
 	gdb_init();
 #endif
 	os_printf("Executing do_break\n");
-//	do_break();
+	do_break();
 	os_printf("Executing do_c_exception\n");
 	do_c_exception();
 	os_printf("Break done\n");

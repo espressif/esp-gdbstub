@@ -87,17 +87,16 @@ is_not_do_break:
 	wsr	a2, ps
 	rsync
 
+#ifdef GDBSTUB_USE_OWN_STACK
 	movi a1, exceptionStack+63*4
+#else
+	movi	a2, savedRegs
+	l32i	a1, a2, 0x58
+#endif
 
 	call0		handle_debug_exception
 
 DebugExceptionExit:
-
-/*
-	movi a2, 0x60000000
-	movi a3, 'X'
-	s32i a3,a2, 0
-*/
 
 	rsr	a2, ps
 	addi	a2, a2, PS_EXCM_MASK
