@@ -411,12 +411,62 @@ int gdbReadCommand() {
 	}
 }
 
+unsigned int getaregval(int reg) {
+	if (reg==0) return savedRegs.a0;
+	if (reg==1) return savedRegs.a1;
+	return savedRegs.a[reg-2];
+}
+
+void setaregval(int reg, unsigned int val) {
+	os_printf("%x -> %x\n", val, reg);
+	if (reg==0) savedRegs.a0=val;
+	if (reg==1) savedRegs.a1=val;
+	savedRegs.a[reg-2]=val;
+}
+
+//Emulate the l32i/s32i instruction we're stopped at.
+emulLdSt() {
+	unsigned char i0=readbyte(savedRegs.pc);
+	unsigned char i1=readbyte(savedRegs.pc+1);
+	unsigned char i2=readbyte(savedRegs.pc+2);
+	int *p;
+	if ((i0&0xf)==2 && (i1&0xf0)==0x20) {
+		//l32i
+		p=(int*)getaregval(i1&0xf)+(i2*4);
+		setaregval(i0>>4, *p);
+		savedRegs.pc+=3;
+	} else if ((i0&0xf)==0x8) {
+		//l32i.n
+		p=(int*)getaregval(i1&0xf)+((i1>>4)*4);
+		setaregval(i0>>4, *p);
+		savedRegs.pc+=2;
+	} else if ((i0&0xf)==2 && (i1&0xf0)==0x60) {
+		//s32i
+		p=(int*)getaregval(i1&0xf)+(i2*4);
+		*p=getaregval(i0>>4);
+		savedRegs.pc+=3;
+	} else if ((i0&0xf)==0x9) {
+		//s32i.n
+		p=(int*)getaregval(i1&0xf)+((i1>>4)*4);
+		*p=getaregval(i0>>4);
+		savedRegs.pc+=2;
+	} else {
+		os_printf("GDBSTUB: No l32i/s32i instruction: %x %x %x. Huh?", i2, i1, i0);
+	}
+}
+
 
 void handle_debug_exception() {
 	xthal_set_intenable(0);
 	ets_wdt_disable();
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
+	if ((savedRegs.reason&0x84)==0x4) {
+		//We stopped due to a watchpoint. We can't re-execute the current instruction
+		//because it will happily re-trigger the same watchpoint, so we emulate it 
+		//while we're still in debugger space.
+		emulLdSt();
+	}
 	ets_wdt_enable();
 	xthal_set_intenable(1);
 }
@@ -496,9 +546,10 @@ void gdbstub_init() {
 //	os_printf("Executing do_c_exception\n");
 //	do_c_exception();
 	
-	testvar=0;
+	testvar=1;
 	test1();
-	os_printf("Testvar = %i\n", testvar);
+	os_printf("Testvar = %x\n", testvar);
+	testvar=-1;
 	os_printf("Break done\n");
 }
 
