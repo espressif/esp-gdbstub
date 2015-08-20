@@ -20,12 +20,12 @@ struct XTensa_exception_frame_s {
 	uint32_t vpri;
 	uint32_t a0;
 	uint32_t a[14]; //a2..a15
-//These are added manually by the exception code; the HAL doesn't include these.
+//These are added manually by the exception code; the HAL doesn't set these on an exception.
 	uint32_t litbase;
 	uint32_t sr176;
 	uint32_t sr208;
 	uint32_t a1;
-	 //'reason; is abused for both the debug and the exception vector: if bit 7 is set,
+	 //'reason' is abused for both the debug and the exception vector: if bit 7 is set,
 	//this contains an exception reason, otherwise it contains a debug vector bitmap.
 	uint32_t reason;
 };
@@ -237,7 +237,8 @@ void sendReason() {
 	gdbPacketEnd();
 }
 
-
+static int hwBreakpointUsed=0;
+static int hwWatchpointUsed=0;
 
 int gdbHandleCommand(unsigned char *cmd, int len) {
 	//Handle a command
@@ -268,32 +269,28 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		gdbPacketEnd();
 	} else if (cmd[0]=='M') {
 		i=gdbGetHexVal(&data, -1); //addr
-		data++;
+		data++; //skip ,
 		j=gdbGetHexVal(&data, -1); //length
-		data++;
+		data++; //skip :
 		for (k=0; k<j; k++) {
 			writeByte(i, gdbGetHexVal(&data, 2));
 			i++;
 		}
+		gdbPacketStart();
+		gdbPacketStr("OK");
+		gdbPacketEnd();
 	} else if (cmd[0]=='?') {
 		//Reply with stop reason
 		sendReason();
+//	} else if (strncmp(cmd, "vCont?", 6)==0) {
 //		gdbPacketStart();
-//		gdbPacketChar('S');
-//		gdbPacketHex(1, 8); //ToDo: figure out better reason, maybe link to exception type
+//		gdbPacketStr("vCont;c;s");
 //		gdbPacketEnd();
-	} else if (cmd[0]=='c') {
+	} else if (strncmp(cmd, "vCont;c", 7)==0 || cmd[0]=='c') {
 		return ST_CONT;
-	} else if (strncmp(cmd, "vCont", 5)==0) {
-		if (cmd[5]=='?') {
-			gdbPacketStart();
-			gdbPacketStr("vCont;c;s");
-			gdbPacketEnd();
-		} else if (cmd[5]=='c') {
-			return ST_CONT;
-		} else if (cmd[5]=='s') {
-			//ToDo: single step...
-		}
+	} else if (strncmp(cmd, "vCont;s", 7)==0 || cmd[0]=='s') {
+		icount_ena_single_step();
+		return ST_CONT;
 	} else if (cmd[0]=='q') {
 		if (strncmp(&cmd[1], "Supported", 9)==0) {
 			gdbPacketStart();
@@ -304,6 +301,58 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 			gdbPacketEnd();
 			return ST_ERR;
 		}
+	} else if (cmd[0]=='Z') {
+		data+=2; //skip 'x,'
+		i=gdbGetHexVal(&data, -1);
+		data++; //skip ','
+		j=gdbGetHexVal(&data, -1);
+		gdbPacketStart();
+		if (cmd[1]=='1') {
+			if (set_hw_breakpoint(i, j)) {
+				gdbPacketStr("OK");
+			} else {
+				gdbPacketStr("E01");
+			}
+		} else if (cmd[1]=='2' || cmd[1]=='3' || cmd[1]=='4') {
+			int access=0;
+			int mask=0;
+			if (cmd[1]=='2') access=2; //write
+			if (cmd[1]=='3') access=1; //read
+			if (cmd[1]=='4') access=3; //access
+			if (j==1) mask=0x3F;
+			if (j==2) mask=0x3E;
+			if (j==4) mask=0x3C;
+			if (j==8) mask=0x38;
+			if (j==16) mask=0x30;
+			if (j==32) mask=0x20;
+			if (j==64) mask=0x00;
+			if (mask!=0 && set_hw_watchpoint(i,mask, access)) {
+				gdbPacketStr("OK");
+			} else {
+				gdbPacketStr("E01");
+			}
+		}
+		gdbPacketEnd();
+	} else if (cmd[0]=='z') {
+		data+=2; //skip 'x,'
+		i=gdbGetHexVal(&data, -1);
+		data++; //skip ','
+		j=gdbGetHexVal(&data, -1);
+		gdbPacketStart();
+		if (cmd[1]=='1') {
+			if (del_hw_breakpoint(i)) {
+				gdbPacketStr("OK");
+			} else {
+				gdbPacketStr("E01");
+			}
+		} else if (cmd[1]=='2' || cmd[1]=='3' || cmd[1]=='4') {
+			if (del_hw_watchpoint(i)) {
+				gdbPacketStr("OK");
+			} else {
+				gdbPacketStr("E01");
+			}
+		}
+		gdbPacketEnd();
 	} else {
 		gdbPacketStart();
 		gdbPacketEnd();
@@ -416,32 +465,40 @@ static void install_exceptions() {
 	}
 }
 
+volatile int testvar;
+
+void test3() {
+	os_printf("test3\n");
+	testvar=42;
+}
+
+void test2() {
+	test3();
+}
+
+void test1() {
+	test2();
+}
+
 void do_c_exception() {
 	volatile char *e=(volatile char*)1;
 	*e=1;
 }
 
 void gdbstub_init() {
-#if 1
-	os_install_putc1(gdb_semihost_putchar1);
-	
-//	ets_wdt_disable();
-//	xthal_set_intenable(0);
-//	while(1) gdbReadCommand();
+//	os_install_putc1(gdb_semihost_putchar1);
 	install_exceptions();
-//	os_printf("Pre init_debug_entry\n");
 	init_debug_entry();
-//	os_printf("Post init_debug_entry\n");
-
-#else
-	gdb_init();
-#endif
 	os_printf("Executing do_break\n");
 	do_break();
-	os_printf("Executing do_break again\n");
-	do_break();
-	os_printf("Executing do_c_exception\n");
-	do_c_exception();
+//	os_printf("Executing do_break again\n");
+//	do_break();
+//	os_printf("Executing do_c_exception\n");
+//	do_c_exception();
+	
+	testvar=0;
+	test1();
+	os_printf("Testvar = %i\n", testvar);
 	os_printf("Break done\n");
 }
 

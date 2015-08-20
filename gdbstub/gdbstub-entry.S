@@ -19,14 +19,13 @@ doNotIncludeThis:
 	.align	4
 
 /*
+The savedRegs struct:
 	uint32_t pc;
 	uint32_t ps;
 	uint32_t sar;
 	uint32_t vpri;
 	uint32_t a0;
 	uint32_t a[14]; //a2..a15
-	//No A1 because that is SP of the user stack.
-
 	uint32_t litbase;
 	uint32_t sr176;
 	uint32_t sr208;
@@ -86,6 +85,14 @@ is_not_do_break:
 	movi a1, exceptionStack+63*4
 #endif
 
+//If ICOUNT is -1, disable it by setting it to 0.
+	rsr		a2, ICOUNT
+	movi	a3, -1
+	bne		a2, a3, noIcountReset
+	movi	a3, 0
+	wsr		a3, ICOUNT
+noIcountReset:
+
 	rsr	a2, ps
 	addi	a2, a2, -PS_EXCM_MASK
 	wsr	a2, ps
@@ -103,10 +110,6 @@ DebugExceptionExit:
 	movi	a2, savedRegs
 	l32i	a0, a2, 0x00
 	wsr		a0, DEBUG_PC
-
-
-	movi	a2, savedRegs
-
 //	l32i	a0, a2, 0x54
 //	wsr		a0, 208
 	l32i	a0, a2, 0x50
@@ -180,6 +183,97 @@ init_debug_entry:
 	ret
 
 
+//Set up ICOUNT register to step one single instruction
+	.global icount_ena_single_step
+	.align 4
+icount_ena_single_step:
+	movi	a2, XCHAL_DEBUGLEVEL
+	wsr		a2, ICOUNTLEVEL
+	movi	a2, 0xfffffffe
+	wsr		a2, ICOUNT
+	isync
+	ret
+
+
+//These routines all assume only one breakpoint and watchpoint is available, which
+//is the case for the ESP8266 Xtensa core.
+
+
+	.global set_hw_breakpoint
+set_hw_breakpoint:
+	//a2 - addr, a3 - len (unused here)
+	rsr		a4, IBREAKENABLE
+	bbsi	a4, 0, return_w_error
+	wsr		a2, IBREAKA
+	movi	a2, 1
+	wsr		a2, IBREAKENABLE
+	isync
+	movi 	a2, 1
+	ret
+
+	.global del_hw_breakpoint
+del_hw_breakpoint:
+	//a2 - addr
+	rsr		a5, IBREAKENABLE
+	bbci	a5, 0, return_w_error
+	rsr		a3, IBREAKA
+	bne		a3, a2, return_w_error
+	movi	a2,0
+	wsr		a2, IBREAKENABLE
+	isync
+	movi	a2, 1
+	ret
+
+	.global set_hw_watchpoint
+	//a2 - addr, a3 - mask, a4 - type (1=read, 2=write, 3=access)
+set_hw_watchpoint:
+	//Check if any of the masked address bits are set. If so, that is an error.
+	movi	a5,0x0000003F
+	xor		a5, a5, a3
+	bany	a2, a5, return_w_error
+	//Check if watchpoint already is set
+	rsr		a5, DBREAKC
+	movi	a6, 0xC0000000
+	bany	a6, a5, return_w_error
+	//Set watchpoint
+	wsr		a2, DBREAKA
+	
+	//Combine type and mask
+	movi	a6, 0x3F
+	and		a3, a3, a6
+	slli	a4, a4, 30
+	or		a3, a3, a4
+	wsr		a3, DBREAKC
+	
+//	movi	a2, 1
+	mov		a2, a3
+	isync
+	ret
+
+
+	.global del_hw_watchpoint
+	//a2 - addr
+del_hw_watchpoint:
+	//See if the address matches
+	rsr		a3, DBREAKA
+	bne		a3, a2, return_w_error
+	//See if the bp actually is set
+	rsr		a3, DBREAKC
+	movi	a2, 0xC0000000
+	bnone	a3, a2, return_w_error
+	//Disable bp
+	movi	a2,0
+	wsr		a2,DBREAKC
+	movi	a2,1
+	isync
+	ret
+
+return_w_error:
+	movi	a2, 0
+	ret
+
+
+//Breakpoint, with an attempt at a functional function prologue and epilogue...
 	.global do_break
 	.align	4
 do_break:
