@@ -173,13 +173,13 @@ int iswap(int i) {
 	return r;
 }
 
-unsigned char readbyte(int p) {
+unsigned char readbyte(unsigned int p) {
 	int *i=(int*)(p&(~3));
 	if (p<0x20000000 || p>=0x60000000) return -1;
 	return *i>>((p&3)*8);
 }
 
-void writeByte(int p, unsigned char d) {
+void writeByte(unsigned int p, unsigned char d) {
 	int *i=(int*)(p&(~3));
 	if (p<0x20000000 || p>=0x60000000) return;
 	if ((p&3)==0) *i=(*i&0xffffff00)|(d<<0);
@@ -273,7 +273,7 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		j=gdbGetHexVal(&data, -1); //length
 		data++; //skip :
 		for (k=0; k<j; k++) {
-			writeByte(i, gdbGetHexVal(&data, 2));
+			writeByte(i, gdbGetHexVal(&data, 8));
 			i++;
 		}
 		gdbPacketStart();
