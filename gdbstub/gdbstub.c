@@ -1,8 +1,6 @@
 #include "gdbstub.h"
-#include "osapi.h"
 
 #include "ets_sys.h"
-#include "osapi.h"
 #include "gpio.h"
 #include "os_type.h"
 #include "user_interface.h"
@@ -10,7 +8,21 @@
 #include "xtensa/corebits.h"
 #include "gdbstub-entry.h"
 
-#include "v7_gdb.h"
+#define FREERTOS
+#ifdef FREERTOS
+#include <string.h>
+#include <stdio.h>
+#define os_printf(...) printf(__VA_ARGS__)
+#define ets_wdt_disable() while (0) {}
+#define ets_wdt_enable() while (0) {}
+#define os_memcpy(a,b,c) memcpy(a,b,c)
+#else
+#include "osapi.h"
+int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
+extern void ets_wdt_disable(void);
+extern void ets_wdt_enable(void);
+#endif
+
 
 //From xtruntime-frames.h
 struct XTensa_exception_frame_s {
@@ -33,11 +45,9 @@ struct XTensa_exception_frame_s {
 
 
 //Not defined in include files...
-int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
 void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
 void xthal_set_intenable(int en);
 void _ResetVector();
-extern void ets_wdt_disable(void);
 
 #define REG_UART_BASE( i )  (0x60000000+(i)*0xf00)
 #define UART_STATUS( i )                        (REG_UART_BASE( i ) + 0x1C)
@@ -509,10 +519,11 @@ static void install_exceptions() {
 			EXCCAUSE_DIVIDE_BY_ZERO, EXCCAUSE_UNALIGNED, EXCCAUSE_INSTR_DATA_ERROR, EXCCAUSE_LOAD_STORE_DATA_ERROR, 
 			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR, EXCCAUSE_INSTR_PROHIBITED,
 			EXCCAUSE_LOAD_PROHIBITED, EXCCAUSE_STORE_PROHIBITED};
-
+#ifndef FREERTOS
 	for (i=0; i<(sizeof(exno)/sizeof(exno[0])); i++) {
 		_xtos_set_exception_handler(exno[i], gdb_exception_handler);
 	}
+#endif
 }
 
 volatile int testvar;
