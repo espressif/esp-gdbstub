@@ -7,20 +7,21 @@
 #include "mem.h"
 #include "xtensa/corebits.h"
 #include "gdbstub-entry.h"
+#include "gdbstub-cfg.h"
 
-#define FREERTOS
+extern void ets_wdt_disable(void);
+extern void ets_wdt_enable(void);
+
 #ifdef FREERTOS
 #include <string.h>
 #include <stdio.h>
 #define os_printf(...) printf(__VA_ARGS__)
-#define ets_wdt_disable() while (0) {}
-#define ets_wdt_enable() while (0) {}
+//#define ets_wdt_disable() while (0) {}
+//#define ets_wdt_enable() while (0) {}
 #define os_memcpy(a,b,c) memcpy(a,b,c)
 #else
 #include "osapi.h"
 int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
-extern void ets_wdt_disable(void);
-extern void ets_wdt_enable(void);
 #endif
 
 
@@ -71,9 +72,20 @@ static unsigned char cmd[PBUFLEN];
 static unsigned char obuf[OBUFLEN];
 static int obufpos=0;
 
+
+static int keepWDTalive() {
+	uint64_t *wdtval=(uint64_t*)0x3ff21048;
+	uint64_t *wdtovf=(uint64_t*)0x3ff210cc;
+	int *wdtctl=(int*)0x3ff210c8;
+	*wdtovf=*wdtval+1600000;
+	*wdtctl|=(1<<31);
+}
+
 static int ICACHE_FLASH_ATTR gdbRecvChar() {
 	int i;
-	while (((READ_PERI_REG(UART_STATUS(0))>>UART_RXFIFO_CNT_S)&UART_RXFIFO_CNT)==0) ;
+	while (((READ_PERI_REG(UART_STATUS(0))>>UART_RXFIFO_CNT_S)&UART_RXFIFO_CNT)==0) {
+		keepWDTalive();
+	}
 	i=READ_PERI_REG(UART_FIFO(0));
 	return i;
 }
@@ -482,17 +494,23 @@ void handle_debug_exception() {
 }
 
 
-void gdb_semihost_putchar1(char c) {
-	int i;
-	obuf[obufpos++]=c;
-	if (c=='\n' || obufpos==OBUFLEN) {
-		gdbPacketStart();
-		gdbPacketChar('O');
-		for (i=0; i<obufpos; i++) gdbPacketHex(obuf[i], 8);
-		gdbPacketEnd();
-		obufpos=0;
+#ifdef FREERTOS
+void handle_user_exception() {
+	xthal_set_intenable(0);
+	ets_wdt_disable();
+	savedRegs.reason|=0x80; //mark as an exception reason
+	sendReason();
+	while(gdbReadCommand()!=ST_CONT);
+	if ((savedRegs.reason&0x84)==0x4) {
+		//We stopped due to a watchpoint. We can't re-execute the current instruction
+		//because it will happily re-trigger the same watchpoint, so we emulate it 
+		//while we're still in debugger space.
+		emulLdSt();
 	}
+	ets_wdt_enable();
+	xthal_set_intenable(1);
 }
+#else
 
 #define EXCEPTION_GDB_SP_OFFSET 0x100
 
@@ -513,18 +531,33 @@ static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	os_memcpy(frame, &savedRegs, 19*4);
 }
 
+
+#endif
+
+void gdb_semihost_putchar1(char c) {
+	int i;
+	obuf[obufpos++]=c;
+	if (c=='\n' || obufpos==OBUFLEN) {
+		gdbPacketStart();
+		gdbPacketChar('O');
+		for (i=0; i<obufpos; i++) gdbPacketHex(obuf[i], 8);
+		gdbPacketEnd();
+		obufpos=0;
+	}
+}
+
+#ifndef FREERTOS
 static void install_exceptions() {
 	int i;
 	int exno[]={EXCCAUSE_ILLEGAL, EXCCAUSE_SYSCALL, EXCCAUSE_INSTR_ERROR, EXCCAUSE_LOAD_STORE_ERROR,
 			EXCCAUSE_DIVIDE_BY_ZERO, EXCCAUSE_UNALIGNED, EXCCAUSE_INSTR_DATA_ERROR, EXCCAUSE_LOAD_STORE_DATA_ERROR, 
 			EXCCAUSE_INSTR_ADDR_ERROR, EXCCAUSE_LOAD_STORE_ADDR_ERROR, EXCCAUSE_INSTR_PROHIBITED,
 			EXCCAUSE_LOAD_PROHIBITED, EXCCAUSE_STORE_PROHIBITED};
-#ifndef FREERTOS
 	for (i=0; i<(sizeof(exno)/sizeof(exno[0])); i++) {
 		_xtos_set_exception_handler(exno[i], gdb_exception_handler);
 	}
-#endif
 }
+#endif
 
 volatile int testvar;
 
@@ -547,15 +580,17 @@ void do_c_exception() {
 }
 
 void gdbstub_init() {
-//	os_install_putc1(gdb_semihost_putchar1);
+	os_install_putc1(gdb_semihost_putchar1);
+#ifndef FREERTOS
 	install_exceptions();
+#endif
 	init_debug_entry();
 	os_printf("Executing do_break\n");
 	do_break();
 //	os_printf("Executing do_break again\n");
 //	do_break();
 //	os_printf("Executing do_c_exception\n");
-//	do_c_exception();
+	do_c_exception();
 	
 	testvar=1;
 	test1();

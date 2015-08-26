@@ -1,4 +1,5 @@
 #include "xtensa-defs.h"
+#include "gdbstub-cfg.h"
 
 .global savedRegs
 .global exceptionStack
@@ -13,7 +14,10 @@
 doNotIncludeThis:
 	xsr	a2, DEBUG_EXCSAVE
 	jx	a2
+	xsr	a2, EXCSAVE_1
+	jx	a2
 */
+
 	.text
 	.global DebugExceptionEntry
 	.align	4
@@ -147,6 +151,107 @@ DebugExceptionExit:
 
 
 
+#ifdef FREERTOS
+	.global handle_user_exception
+	.global UserExceptionEntry
+	.align	4
+UserExceptionEntry:
+//Save all regs to structure
+	movi	a2, savedRegs
+	s32i	a0, a2, 0x10
+	s32i	a1, a2, 0x58
+	rsr		a0, PS
+	s32i	a0, a2, 0x04
+	rsr		a0, EXCSAVE_1 //was R2
+	s32i	a0, a2, 0x14
+	s32i	a3, a2, 0x18
+	s32i	a4, a2, 0x1c
+	s32i	a5, a2, 0x20
+	s32i	a6, a2, 0x24
+	s32i	a7, a2, 0x28
+	s32i	a8, a2, 0x2c
+	s32i	a9, a2, 0x30
+	s32i	a10, a2, 0x34
+	s32i	a11, a2, 0x38
+	s32i	a12, a2, 0x3c
+	s32i	a13, a2, 0x40
+	s32i	a14, a2, 0x44
+	s32i	a15, a2, 0x48
+	rsr		a0, SAR
+	s32i	a0, a2, 0x08
+	rsr		a0, LITBASE
+	s32i	a0, a2, 0x4C
+	rsr		a0, 176
+	s32i	a0, a2, 0x50
+	rsr		a0, 208
+	s32i	a0, a2, 0x54
+	rsr		a0, EXCCAUSE
+	s32i	a0, a2, 0x5C
+	rsr		a4, EPC1
+	s32i	a4, a2, 0x00
+
+
+#ifdef GDBSTUB_USE_OWN_STACK
+	movi a1, exceptionStack+63*4
+#endif
+
+	rsr	a2, ps
+	addi	a2, a2, -PS_EXCM_MASK
+	wsr	a2, ps
+	rsync
+
+	call0		handle_user_exception
+
+UserExceptionExit:
+
+	rsr	a2, ps
+	addi	a2, a2, PS_EXCM_MASK
+	wsr	a2, ps
+	rsync
+
+	movi	a2, savedRegs
+	l32i	a0, a2, 0x00
+	wsr		a0, EPC1
+//	l32i	a0, a2, 0x54
+//	wsr		a0, 208
+	l32i	a0, a2, 0x50
+	wsr		a0, 176
+	l32i	a0, a2, 0x4C
+	wsr		a0, LITBASE
+	l32i	a0, a2, 0x08
+	wsr		a0, SAR
+	l32i	a15, a2, 0x48
+	l32i	a14, a2, 0x44
+	l32i	a13, a2, 0x40
+	l32i	a12, a2, 0x3c
+	l32i	a11, a2, 0x38
+	l32i	a10, a2, 0x34
+	l32i	a9, a2, 0x30
+	l32i	a8, a2, 0x2c
+	l32i	a7, a2, 0x28
+	l32i	a6, a2, 0x24
+	l32i	a5, a2, 0x20
+	l32i	a4, a2, 0x1c
+	l32i	a3, a2, 0x18
+	l32i	a0, a2, 0x14
+	wsr		a0, EXCSAVE_1 //was R2
+	l32i	a0, a2, 0x04
+	wsr		a0, PS
+	l32i	a1, a2, 0x58
+	l32i	a0, a2, 0x10
+
+	//Read back vector-saved a2 value, put back address of this routine.
+	movi	a2, UserExceptionEntry
+	xsr	a2, EXCSAVE_1
+
+	//All done
+	rfe
+#endif
+
+
+
+
+
 	.global save_extra_sfrs_for_exception
 	.align 4
 //The Xtensa OS HAL does not save all the special function register things. This bit of assembly
@@ -176,9 +281,28 @@ init_debug_entry:
 	movi	a3, 0x00000002
 	s32i	a3, a2, 4
 
+
 //Tell the just-installed debug vector where to go.
 	movi	a2, DebugExceptionEntry
 	wsr		a2, DEBUG_EXCSAVE
+
+#ifdef FREERTOS
+//This puts the following 2 instructions into the user exception vector:
+//	xsr	a2, EXCSAVE_1
+//	jx	a2
+	movi	a2, _UserExceptionVector
+	movi	a3, 0xa061d120
+	s32i	a3, a2, 0
+	movi	a3, 0x00000002
+	s32i	a3, a2, 4
+
+//Tell the just-installed user vector where to go.
+	movi	a2, UserExceptionEntry
+	wsr		a2, EXCSAVE_1
+
+#endif
+
+
 
 	ret
 
