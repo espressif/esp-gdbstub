@@ -281,7 +281,18 @@ int gdbHandleCommand(unsigned char *cmd, int len) {
 		gdbPacketHex(iswap(savedRegs.ps), 32);
 		gdbPacketEnd();
 	} else if (cmd[0]=='G') {
-		//ToDo
+		savedRegs.a0=iswap(gdbGetHexVal(&data, 32));
+		savedRegs.a1=iswap(gdbGetHexVal(&data, 32));
+		for (i=2; i<16; i++) savedRegs.a[i-2]=iswap(gdbGetHexVal(&data, 32));
+		savedRegs.pc=iswap(gdbGetHexVal(&data, 32));
+		savedRegs.sar=iswap(gdbGetHexVal(&data, 32));
+		savedRegs.litbase=iswap(gdbGetHexVal(&data, 32));
+		savedRegs.sr176=iswap(gdbGetHexVal(&data, 32));
+		gdbGetHexVal(&data, 32);
+		savedRegs.ps=iswap(gdbGetHexVal(&data, 32));
+		gdbPacketStart();
+		gdbPacketStr("OK");
+		gdbPacketEnd();
 	} else if (cmd[0]=='m') {
 		i=gdbGetHexVal(&data, -1);
 		data++;

@@ -156,6 +156,7 @@ DebugExceptionExit:
 	.global UserExceptionEntry
 	.align	4
 UserExceptionEntry:
+
 //Save all regs to structure
 	movi	a2, savedRegs
 	s32i	a0, a2, 0x10
