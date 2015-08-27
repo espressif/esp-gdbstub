@@ -86,7 +86,7 @@ is_not_do_break:
 	s32i	a4, a2, 0x00
 
 #ifdef GDBSTUB_USE_OWN_STACK
-	movi a1, exceptionStack+63*4
+	movi a1, exceptionStack+255*4
 #endif
 
 //If ICOUNT is -1, disable it by setting it to 0.
@@ -192,7 +192,7 @@ UserExceptionEntry:
 
 
 #ifdef GDBSTUB_USE_OWN_STACK
-	movi a1, exceptionStack+63*4
+	movi a1, exceptionStack+255*4
 #endif
 
 	rsr	a2, ps
@@ -247,8 +247,6 @@ UserExceptionExit:
 	//All done
 	rfe
 #endif
-
-
 
 
 

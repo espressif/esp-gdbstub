@@ -65,8 +65,10 @@ static char chsum;
 
 //The asm stub saves the Xtensa registers here when a debugging exception happens.
 struct XTensa_exception_frame_s savedRegs;
+#ifdef GDBSTUB_USE_OWN_STACK
 //This is the debugging exception stack.
-int exceptionStack[64];
+int exceptionStack[256];
+#endif
 
 static unsigned char cmd[PBUFLEN];
 static unsigned char obuf[OBUFLEN];
@@ -530,10 +532,9 @@ static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 
 	os_memcpy(frame, &savedRegs, 19*4);
 }
-
-
 #endif
 
+#ifdef REDIRECT_CONSOLE_OUTPUT
 void gdb_semihost_putchar1(char c) {
 	int i;
 	obuf[obufpos++]=c;
@@ -545,6 +546,7 @@ void gdb_semihost_putchar1(char c) {
 		obufpos=0;
 	}
 }
+#endif
 
 #ifndef FREERTOS
 static void install_exceptions() {
@@ -559,43 +561,17 @@ static void install_exceptions() {
 }
 #endif
 
-volatile int testvar;
-
-void test3() {
-	os_printf("test3\n");
-	testvar=42;
-}
-
-void test2() {
-	test3();
-}
-
-void test1() {
-	test2();
-}
-
-void do_c_exception() {
-	volatile char *e=(volatile char*)1;
-	*e=1;
-}
 
 void gdbstub_init() {
+#ifdef REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
+#endif
 #ifndef FREERTOS
 	install_exceptions();
 #endif
 	init_debug_entry();
-	os_printf("Executing do_break\n");
+#ifdef BREAK_ON_INIT
 	do_break();
-//	os_printf("Executing do_break again\n");
-//	do_break();
-//	os_printf("Executing do_c_exception\n");
-	do_c_exception();
-	
-	testvar=1;
-	test1();
-	os_printf("Testvar = %x\n", testvar);
-	testvar=-1;
-	os_printf("Break done\n");
+#endif
 }
 
