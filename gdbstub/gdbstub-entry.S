@@ -5,8 +5,8 @@
 .global exceptionStack
 
 	.text
-
 .literal_position
+
 
 /*
 //Useful to uncomment this and recompile when you need to look up the opcodes that replace 
@@ -17,6 +17,7 @@ doNotIncludeThis:
 	xsr	a2, EXCSAVE_1
 	jx	a2
 */
+
 
 	.text
 	.global DebugExceptionEntry
@@ -289,15 +290,23 @@ init_debug_entry:
 //This puts the following 2 instructions into the user exception vector:
 //	xsr	a2, EXCSAVE_1
 //	jx	a2
-	movi	a2, _UserExceptionVector
+/*
+//	movi	a2, _UserExceptionVector
+	movi	a2, user_fatal_exception_handler
 	movi	a3, 0xa061d120
 	s32i	a3, a2, 0
 	movi	a3, 0x00000002
 	s32i	a3, a2, 4
+*/
+//	.global user_fatal_exception_handler
+//	movi	a2, user_fatal_exception_handler
+//	movi	a3, ((UserExceptionEntry-user_fatal_exception_handler-4)<<6)|6
+//	s32i 	a3, a2, 0
+
 
 //Tell the just-installed user vector where to go.
-	movi	a2, UserExceptionEntry
-	wsr		a2, EXCSAVE_1
+//	movi	a2, UserExceptionEntry
+//	wsr		a2, EXCSAVE_1
 
 #endif
 

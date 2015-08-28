@@ -570,8 +570,21 @@ static void install_exceptions() {
 		_xtos_set_exception_handler(exno[i], gdb_exception_handler);
 	}
 }
+#else
+extern void user_fatal_exception_handler();
+extern void UserExceptionEntry();
+
+static void install_exceptions() {
+	//Replace the user_fatal_exception_handler by a jump to our own code
+	int *ufe=(int*)user_fatal_exception_handler;
+	//This mess encodes as a relative jump instruction to user_fatal_exception_handler
+	*ufe=((((int)UserExceptionEntry-(int)user_fatal_exception_handler)-4)<<6)|6;
+}
 #endif
 
+
+extern void user_fatal_exception_handler();
+extern void UserExceptionEntry();
 
 void gdbstub_init() {
 #ifdef REDIRECT_CONSOLE_OUTPUT
@@ -580,6 +593,7 @@ void gdbstub_init() {
 #ifndef FREERTOS
 	install_exceptions();
 #endif
+
 	init_debug_entry();
 #ifdef BREAK_ON_INIT
 	do_break();
