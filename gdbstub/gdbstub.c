@@ -25,16 +25,10 @@ static wdtfntype *ets_wdt_enable=(wdtfntype *)0x40002fa0;
 
 #else
 /*
-OS-less SDK defines. Defines some headers for things that aren't in the include files.
+OS-less SDK defines. Defines some headers for things that aren't in the include files, plus
+the xthal stack frame struct.
 */
 #include "osapi.h"
-void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
-int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
-
-#endif
-
-//Not defined in include files.
-void xthal_set_intenable(int en);
 
 //From xtruntime-frames.h
 struct XTensa_exception_frame_s {
@@ -53,6 +47,15 @@ struct XTensa_exception_frame_s {
 	//this contains an exception reason, otherwise it contains a debug vector bitmap.
 	uint32_t reason;
 };
+
+void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
+int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
+
+#endif
+
+//Not defined in include files.
+void xthal_set_intenable(int en);
+
 
 //We need some UART register defines.
 #define REG_UART_BASE( i )  (0x60000000+(i)*0xf00)
