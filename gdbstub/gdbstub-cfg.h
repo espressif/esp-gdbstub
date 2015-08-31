@@ -13,7 +13,7 @@ up 1K of RAM, but may be useful if you're debugging stack or stack pointer corru
 normally disabled because not many situations need it. If for some reason the GDB communication 
 stops when you run into an error in your code, try enabling this.
 */
-#define GDBSTUB_USE_OWN_STACK
+//#define GDBSTUB_USE_OWN_STACK
 
 
 /*
@@ -21,14 +21,14 @@ Enabling this will redirect console output to GDB. This basically means that pri
 will show up in your gdb session, which is useful if you use gdb to do stuff. It also means that if
 you use a normal terminal, you can't read the printfs anymore.
 */
-//#define REDIRECT_CONSOLE_OUTPUT
+#define REDIRECT_CONSOLE_OUTPUT
 
 
 /*
 Enable this if you want the GDB stub to wait for you to attach GDB before running. It does this by
 breaking in the init routine; use the gdb 'c' command (continue) to start the program.
 */
-//#define BREAK_ON_INIT
+#define BREAK_ON_INIT
 
 #endif
 
