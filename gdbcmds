@@ -1,4 +1,4 @@
-file .output/eagle/debug/image/eagle.app.v6.out
+file ../.output/eagle/debug/image/eagle.app.v6.out
 #set remotedebug 1
 set remotelogfile gdb_rsp_logfile.txt
 #set serial baud 115200
