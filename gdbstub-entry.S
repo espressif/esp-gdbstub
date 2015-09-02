@@ -1,3 +1,12 @@
+/******************************************************************************
+ * Copyright 2015 Espressif Systems
+ *
+ * Description: Assembly routines for the gdbstub
+ *
+ * License: ESPRESSIF MIT License
+ *******************************************************************************/
+
+
 #include "xtensa-defs.h"
 #include "gdbstub-cfg.h"
 

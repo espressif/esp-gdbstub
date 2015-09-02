@@ -1,3 +1,12 @@
+/******************************************************************************
+ * Copyright 2015 Espressif Systems
+ *
+ * Description: A stub to make the ESP8266 debuggable by GDB over the serial 
+ * port.
+ *
+ * License: ESPRESSIF MIT License
+ *******************************************************************************/
+
 #include "gdbstub.h"
 
 #include "ets_sys.h"

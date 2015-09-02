@@ -38,7 +38,6 @@ private exception/breakpoint stack, console redirection to GDB, wait till debugg
  * Run gdb, depending on your configuration immediately after resetting the board or after it has run into
 an exception. The easiest way to do it is to use the provided script: xtensa-lx106-elf-gdb -x gdbcmds -b 38400
 
-
 Notes
 -----
  * Using software breakpoints ('br') only works on code that's in RAM. Code in flash can only have a hardware
@@ -49,7 +48,13 @@ the UART interrupt. You can add this yourself by calling gdbstub_do_break if you
 value 0x03.
  * Continuing from an exception is not (yet) supported in FreeRTOS mode.
 
+License
+-------
+THis gdbstub is licensed under the Espressif MIT license, as described in the License file.
+
+
 Thanks
 ------
  * Cesanta, for their initial ESP8266 exception handling only gdbstub
  * jcmvbkbc, for providing an incompatible but interesting gdbstub for other Xtensa CPUs
+

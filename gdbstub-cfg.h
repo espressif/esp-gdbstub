@@ -13,7 +13,7 @@ up 1K of RAM, but may be useful if you're debugging stack or stack pointer corru
 normally disabled because not many situations need it. If for some reason the GDB communication 
 stops when you run into an error in your code, try enabling this.
 */
-#define GDBSTUB_USE_OWN_STACK
+//#define GDBSTUB_USE_OWN_STACK
 
 
 /*
