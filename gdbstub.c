@@ -8,13 +8,14 @@
  *******************************************************************************/
 
 #include "gdbstub.h"
-
 #include "ets_sys.h"
 #include "gpio.h"
 #include "os_type.h"
 #include "user_interface.h"
 #include "mem.h"
 #include "xtensa/corebits.h"
+
+#include "gdbstub.h"
 #include "gdbstub-entry.h"
 #include "gdbstub-cfg.h"
 
@@ -82,7 +83,7 @@ void xthal_set_intenable(int en);
 #define OBUFLEN 32
 
 //The asm stub saves the Xtensa registers here when a debugging exception happens.
-struct XTensa_exception_frame_s savedRegs;
+struct XTensa_exception_frame_s gdbstub_savedRegs;
 #ifdef GDBSTUB_USE_OWN_STACK
 //This is the debugging exception stack.
 int exceptionStack[256];
@@ -262,20 +263,20 @@ static void sendReason() {
 	int i=0;
 	gdbPacketStart();
 	gdbPacketChar('T');
-	if (savedRegs.reason&0x80) {
+	if (gdbstub_savedRegs.reason&0x80) {
 		//We stopped because of an exception. Convert exception code to a signal number and send it.
-		i=savedRegs.reason&0x7f;
+		i=gdbstub_savedRegs.reason&0x7f;
 		if (i<sizeof(exceptionSignal)) return gdbPacketHex(exceptionSignal[i], 8); else gdbPacketHex(11, 8);
 	} else {
 		//We stopped because of a debugging exception.
 		gdbPacketHex(5, 8); //sigtrap
 //Current Xtensa GDB versions don't seem to request this, so let's leave it off.
 #if 0
-		if (savedRegs.reason&(1<<0)) reason="break";
-		if (savedRegs.reason&(1<<1)) reason="hwbreak";
-		if (savedRegs.reason&(1<<2)) reason="watch";
-		if (savedRegs.reason&(1<<3)) reason="swbreak";
-		if (savedRegs.reason&(1<<4)) reason="swbreak";
+		if (gdbstub_savedRegs.reason&(1<<0)) reason="break";
+		if (gdbstub_savedRegs.reason&(1<<1)) reason="hwbreak";
+		if (gdbstub_savedRegs.reason&(1<<2)) reason="watch";
+		if (gdbstub_savedRegs.reason&(1<<3)) reason="swbreak";
+		if (gdbstub_savedRegs.reason&(1<<4)) reason="swbreak";
 
 		gdbPacketStr(reason);
 		gdbPacketChar(':');
@@ -292,26 +293,26 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 	unsigned char *data=cmd+1;
 	if (cmd[0]=='g') {		//send all registers to gdb
 		gdbPacketStart();
-		gdbPacketHex(iswap(savedRegs.a0), 32);
-		gdbPacketHex(iswap(savedRegs.a1), 32);
-		for (i=2; i<16; i++) gdbPacketHex(iswap(savedRegs.a[i-2]), 32);
-		gdbPacketHex(iswap(savedRegs.pc), 32);
-		gdbPacketHex(iswap(savedRegs.sar), 32);
-		gdbPacketHex(iswap(savedRegs.litbase), 32);
-		gdbPacketHex(iswap(savedRegs.sr176), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.a0), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.a1), 32);
+		for (i=2; i<16; i++) gdbPacketHex(iswap(gdbstub_savedRegs.a[i-2]), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.pc), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.sar), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.litbase), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.sr176), 32);
 		gdbPacketHex(0, 32);
-		gdbPacketHex(iswap(savedRegs.ps), 32);
+		gdbPacketHex(iswap(gdbstub_savedRegs.ps), 32);
 		gdbPacketEnd();
 	} else if (cmd[0]=='G') {	//receive content for all registers from gdb
-		savedRegs.a0=iswap(gdbGetHexVal(&data, 32));
-		savedRegs.a1=iswap(gdbGetHexVal(&data, 32));
-		for (i=2; i<16; i++) savedRegs.a[i-2]=iswap(gdbGetHexVal(&data, 32));
-		savedRegs.pc=iswap(gdbGetHexVal(&data, 32));
-		savedRegs.sar=iswap(gdbGetHexVal(&data, 32));
-		savedRegs.litbase=iswap(gdbGetHexVal(&data, 32));
-		savedRegs.sr176=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.a0=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.a1=iswap(gdbGetHexVal(&data, 32));
+		for (i=2; i<16; i++) gdbstub_savedRegs.a[i-2]=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.pc=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.sar=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.litbase=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.sr176=iswap(gdbGetHexVal(&data, 32));
 		gdbGetHexVal(&data, 32);
-		savedRegs.ps=iswap(gdbGetHexVal(&data, 32));
+		gdbstub_savedRegs.ps=iswap(gdbGetHexVal(&data, 32));
 		gdbPacketStart();
 		gdbPacketStr("OK");
 		gdbPacketEnd();
@@ -345,7 +346,7 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 	} else if (strncmp(cmd, "vCont;c", 7)==0 || cmd[0]=='c') {	//continue execution
 		return ST_CONT;
 	} else if (strncmp(cmd, "vCont;s", 7)==0 || cmd[0]=='s') {	//single-step instruction
-		icount_ena_single_step();
+		gdbstub_icount_ena_single_step();
 		return ST_CONT;
 	} else if (cmd[0]=='q') {	//Extended query
 		if (strncmp(&cmd[1], "Supported", 9)==0) { //Capabilities query
@@ -365,7 +366,7 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 		j=gdbGetHexVal(&data, -1);
 		gdbPacketStart();
 		if (cmd[1]=='1') {	//Set breakpoint
-			if (set_hw_breakpoint(i, j)) {
+			if (gdbstub_set_hw_breakpoint(i, j)) {
 				gdbPacketStr("OK");
 			} else {
 				gdbPacketStr("E01");
@@ -383,7 +384,7 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 			if (j==16) mask=0x30;
 			if (j==32) mask=0x20;
 			if (j==64) mask=0x00;
-			if (mask!=0 && set_hw_watchpoint(i,mask, access)) {
+			if (mask!=0 && gdbstub_set_hw_watchpoint(i,mask, access)) {
 				gdbPacketStr("OK");
 			} else {
 				gdbPacketStr("E01");
@@ -397,13 +398,13 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 		j=gdbGetHexVal(&data, -1);
 		gdbPacketStart();
 		if (cmd[1]=='1') {	//hardware breakpoint
-			if (del_hw_breakpoint(i)) {
+			if (gdbstub_del_hw_breakpoint(i)) {
 				gdbPacketStr("OK");
 			} else {
 				gdbPacketStr("E01");
 			}
 		} else if (cmd[1]=='2' || cmd[1]=='3' || cmd[1]=='4') { //hardware watchpoint
-			if (del_hw_watchpoint(i)) {
+			if (gdbstub_del_hw_watchpoint(i)) {
 				gdbPacketStr("OK");
 			} else {
 				gdbPacketStr("E01");
@@ -471,45 +472,45 @@ static int gdbReadCommand() {
 
 //Get the value of one of the A registers
 static unsigned int getaregval(int reg) {
-	if (reg==0) return savedRegs.a0;
-	if (reg==1) return savedRegs.a1;
-	return savedRegs.a[reg-2];
+	if (reg==0) return gdbstub_savedRegs.a0;
+	if (reg==1) return gdbstub_savedRegs.a1;
+	return gdbstub_savedRegs.a[reg-2];
 }
 
 //Set the value of one of the A registers
 static void setaregval(int reg, unsigned int val) {
 	os_printf("%x -> %x\n", val, reg);
-	if (reg==0) savedRegs.a0=val;
-	if (reg==1) savedRegs.a1=val;
-	savedRegs.a[reg-2]=val;
+	if (reg==0) gdbstub_savedRegs.a0=val;
+	if (reg==1) gdbstub_savedRegs.a1=val;
+	gdbstub_savedRegs.a[reg-2]=val;
 }
 
 //Emulate the l32i/s32i instruction we're stopped at.
 static void emulLdSt() {
-	unsigned char i0=readbyte(savedRegs.pc);
-	unsigned char i1=readbyte(savedRegs.pc+1);
-	unsigned char i2=readbyte(savedRegs.pc+2);
+	unsigned char i0=readbyte(gdbstub_savedRegs.pc);
+	unsigned char i1=readbyte(gdbstub_savedRegs.pc+1);
+	unsigned char i2=readbyte(gdbstub_savedRegs.pc+2);
 	int *p;
 	if ((i0&0xf)==2 && (i1&0xf0)==0x20) {
 		//l32i
 		p=(int*)getaregval(i1&0xf)+(i2*4);
 		setaregval(i0>>4, *p);
-		savedRegs.pc+=3;
+		gdbstub_savedRegs.pc+=3;
 	} else if ((i0&0xf)==0x8) {
 		//l32i.n
 		p=(int*)getaregval(i1&0xf)+((i1>>4)*4);
 		setaregval(i0>>4, *p);
-		savedRegs.pc+=2;
+		gdbstub_savedRegs.pc+=2;
 	} else if ((i0&0xf)==2 && (i1&0xf0)==0x60) {
 		//s32i
 		p=(int*)getaregval(i1&0xf)+(i2*4);
 		*p=getaregval(i0>>4);
-		savedRegs.pc+=3;
+		gdbstub_savedRegs.pc+=3;
 	} else if ((i0&0xf)==0x9) {
 		//s32i.n
 		p=(int*)getaregval(i1&0xf)+((i1>>4)*4);
 		*p=getaregval(i0>>4);
-		savedRegs.pc+=2;
+		gdbstub_savedRegs.pc+=2;
 	} else {
 		os_printf("GDBSTUB: No l32i/s32i instruction: %x %x %x. Huh?", i2, i1, i0);
 	}
@@ -517,12 +518,12 @@ static void emulLdSt() {
 
 //We just caught a debug exception and need to handle it. This is called from an assembly
 //routine in gdbstub-entry.S
-void handle_debug_exception() {
+void gdbstub_handle_debug_exception() {
 	xthal_set_intenable(0);
 	ets_wdt_disable();
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
-	if ((savedRegs.reason&0x84)==0x4) {
+	if ((gdbstub_savedRegs.reason&0x84)==0x4) {
 		//We stopped due to a watchpoint. We can't re-execute the current instruction
 		//because it will happily re-trigger the same watchpoint, so we emulate it 
 		//while we're still in debugger space.
@@ -535,10 +536,10 @@ void handle_debug_exception() {
 
 #ifdef FREERTOS
 //Freetos exception. This routine is called by an assembly routine in gdbstub-entry.S
-void handle_user_exception() {
+void gdbstub_handle_user_exception() {
 	xthal_set_intenable(0);
 	ets_wdt_disable();
-	savedRegs.reason|=0x80; //mark as an exception reason
+	gdbstub_savedRegs.reason|=0x80; //mark as an exception reason
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
 	ets_wdt_enable();
@@ -551,13 +552,13 @@ void handle_user_exception() {
 static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	//Save the extra registers the Xtensa HAL doesn't save
 	save_extra_sfrs_for_exception();
-	//Copy registers the Xtensa HAL did save to savedRegs
-	os_memcpy(&savedRegs, frame, 19*4);
+	//Copy registers the Xtensa HAL did save to gdbstub_savedRegs
+	os_memcpy(&gdbstub_savedRegs, frame, 19*4);
 	//Credits go to Cesanta for this trick. A1 seems to be destroyed, but because it
 	//has a fixed offset from the address of the passed frame, we can recover it.
-	savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
+	gdbstub_savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
 
-	savedRegs.reason|=0x80; //mark as an exception reason
+	gdbstub_savedRegs.reason|=0x80; //mark as an exception reason
 
 	xthal_set_intenable(0);
 	ets_wdt_disable();
@@ -567,14 +568,14 @@ static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	xthal_set_intenable(1);
 
 	//Copy any changed registers back to the frame the Xtensa HAL uses.
-	os_memcpy(frame, &savedRegs, 19*4);
+	os_memcpy(frame, &gdbstub_savedRegs, 19*4);
 }
 #endif
 
 #ifdef REDIRECT_CONSOLE_OUTPUT
 //Replacement putchar1 routine. Instead of spitting out the character directly, it will buffer up to
 //OBUFLEN characters (or up to a \n, whichever comes earlier) and send it out as a gdb stdout packet.
-void gdb_semihost_putchar1(char c) {
+static void gdb_semihost_putchar1(char c) {
 	int i;
 	obuf[obufpos++]=c;
 	if (c=='\n' || obufpos==OBUFLEN) {
@@ -605,13 +606,13 @@ static void install_exceptions() {
 //We use a small hack to replace that with a jump to our own handler, which then has the task of
 //decyphering and re-instating the registers the FreeRTOS code left.
 extern void user_fatal_exception_handler();
-extern void UserExceptionEntry();
+extern void gdbstub_user_exception_entry();
 
 static void install_exceptions() {
 	//Replace the user_fatal_exception_handler by a jump to our own code
 	int *ufe=(int*)user_fatal_exception_handler;
 	//This mess encodes as a relative jump instruction to user_fatal_exception_handler
-	*ufe=((((int)UserExceptionEntry-(int)user_fatal_exception_handler)-4)<<6)|6;
+	*ufe=((((int)gdbstub_user_exception_entry-(int)user_fatal_exception_handler)-4)<<6)|6;
 }
 #endif
 
@@ -621,9 +622,9 @@ void gdbstub_init() {
 	os_install_putc1(gdb_semihost_putchar1);
 #endif
 	install_exceptions();
-	init_debug_entry();
+	gdbstub_init_debug_entry();
 #ifdef BREAK_ON_INIT
-	do_break();
+	gdbstub_do_break();
 #endif
 }
 

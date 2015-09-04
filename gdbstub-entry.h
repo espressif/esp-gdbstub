@@ -1,13 +1,13 @@
 #ifndef GDBSTUB_ENTRY_H
 #define GDBSTUB_ENTRY_H
 
-void init_debug_entry();
-void do_break();
-void icount_ena_single_step();
+void gdbstub_init_debug_entry();
+void gdbstub_do_break();
+void gdbstub_icount_ena_single_step();
 
-int set_hw_breakpoint(int addr, int len);
-int set_hw_watchpoint(int addr, int len, int type);
-int del_hw_breakpoint(int addr);
-int del_hw_watchpoint(int addr);
+int gdbstub_set_hw_breakpoint(int addr, int len);
+int gdbstub_set_hw_watchpoint(int addr, int len, int type);
+int gdbstub_del_hw_breakpoint(int addr);
+int gdbstub_del_hw_watchpoint(int addr);
 
 #endif

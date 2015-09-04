@@ -10,14 +10,13 @@
 #include "xtensa-defs.h"
 #include "gdbstub-cfg.h"
 
-.global savedRegs
-.global exceptionStack
+.global gdbstub_savedRegs
+.global gdbstub_exceptionStack
 
 	.text
 .literal_position
 
 	.text
-	.global DebugExceptionEntry
 	.align	4
 
 /*
@@ -41,9 +40,9 @@ This is the debugging exception routine; it's called by the debugging vector
 We arrive here with all regs intact except for a2. The old contents of A2 are saved 
 into the DEBUG_EXCSAVE special function register. EPC is the original PC.
 */
-DebugExceptionEntry:
+gdbstub_debug_exception_entry:
 //Save all regs to structure
-	movi	a2, savedRegs
+	movi	a2, gdbstub_savedRegs
 	s32i	a0, a2, 0x10
 	s32i	a1, a2, 0x58
 	rsr		a0, DEBUG_PS
@@ -103,7 +102,7 @@ noIcountReset:
 	rsync
 
 //Call into the C code to do the actual handling.
-	call0		handle_debug_exception
+	call0	gdbstub_handle_debug_exception
 
 DebugExceptionExit:
 
@@ -112,8 +111,8 @@ DebugExceptionExit:
 	wsr	a2, ps
 	rsync
 
-	//Restore registers from te savedRegs struct
-	movi	a2, savedRegs
+	//Restore registers from the gdbstub_savedRegs struct
+	movi	a2, gdbstub_savedRegs
 	l32i	a0, a2, 0x00
 	wsr		a0, DEBUG_PC
 //	l32i	a0, a2, 0x54
@@ -145,7 +144,7 @@ DebugExceptionExit:
 	l32i	a0, a2, 0x10
 
 	//Read back vector-saved a2 value, put back address of this routine.
-	movi	a2, DebugExceptionEntry
+	movi	a2, gdbstub_debug_exception_entry
 	xsr	a2, DEBUG_EXCSAVE
 
 	//All done. Return to where we came from.
@@ -170,12 +169,12 @@ the user exception handler vector:
 	sf+12: orig a0
 	sf: magic no?
 */
-	.global handle_user_exception
-	.global UserExceptionEntry
+	.global gdbstub_handle_user_exception
+	.global gdbstub_user_exception_entry
 	.align	4
-UserExceptionEntry:
+gdbstub_user_exception_entry:
 //Save all regs to structure
-	movi	a0, savedRegs
+	movi	a0, gdbstub_savedRegs
 	s32i	a1, a0, 0x14 //was a2
 	s32i	a3, a0, 0x18
 	s32i	a4, a0, 0x1c
@@ -220,7 +219,7 @@ UserExceptionEntry:
 	wsr	a2, ps
 	rsync
 
-	call0		handle_user_exception
+	call0	gdbstub_handle_user_exception
 
 UserExceptionExit:
 
@@ -235,12 +234,12 @@ FreeRTOS to allow this in the future. (Which will then kill backwards compatibil
 
 
 
-	.global save_extra_sfrs_for_exception
+	.global gdbstub_save_extra_sfrs_for_exception
 	.align 4
 //The Xtensa OS HAL does not save all the special function register things. This bit of assembly
-//fills the savedRegs struct with them.
-save_extra_sfrs_for_exception:
-	movi	a2, savedRegs
+//fills the gdbstub_savedRegs struct with them.
+gdbstub_save_extra_sfrs_for_exception:
+	movi	a2, gdbstub_savedRegs
 	rsr		a3, LITBASE
 	s32i	a3, a2, 0x4C
 	rsr		a3, 176
@@ -251,10 +250,10 @@ save_extra_sfrs_for_exception:
 	s32i	a3, a2, 0x5C
 	ret
 
-	.global init_debug_entry
+	.global gdbstub_init_debug_entry
 	.global _DebugExceptionVector
 	.align	4
-init_debug_entry:
+gdbstub_init_debug_entry:
 //This puts the following 2 instructions into the debug exception vector:
 //	xsr	a2, DEBUG_EXCSAVE
 //	jx	a2
@@ -265,16 +264,16 @@ init_debug_entry:
 	s32i	a3, a2, 4
 
 //Tell the just-installed debug vector where to go.
-	movi	a2, DebugExceptionEntry
+	movi	a2, gdbstub_debug_exception_entry
 	wsr		a2, DEBUG_EXCSAVE
 
 	ret
 
 
 //Set up ICOUNT register to step one single instruction
-	.global icount_ena_single_step
+	.global gdbstub_icount_ena_single_step
 	.align 4
-icount_ena_single_step:
+gdbstub_icount_ena_single_step:
 	movi	a2, XCHAL_DEBUGLEVEL
 	wsr		a2, ICOUNTLEVEL
 	movi	a2, 0xfffffffe
@@ -287,8 +286,8 @@ icount_ena_single_step:
 //is the case for the ESP8266 Xtensa core.
 
 
-	.global set_hw_breakpoint
-set_hw_breakpoint:
+	.global gdbstub_set_hw_breakpoint
+gdbstub_set_hw_breakpoint:
 	//a2 - addr, a3 - len (unused here)
 	rsr		a4, IBREAKENABLE
 	bbsi	a4, 0, return_w_error
@@ -299,8 +298,8 @@ set_hw_breakpoint:
 	movi 	a2, 1
 	ret
 
-	.global del_hw_breakpoint
-del_hw_breakpoint:
+	.global gdbstub_del_hw_breakpoint
+gdbstub_del_hw_breakpoint:
 	//a2 - addr
 	rsr		a5, IBREAKENABLE
 	bbci	a5, 0, return_w_error
@@ -312,9 +311,9 @@ del_hw_breakpoint:
 	movi	a2, 1
 	ret
 
-	.global set_hw_watchpoint
+	.global gdbstub_set_hw_watchpoint
 	//a2 - addr, a3 - mask, a4 - type (1=read, 2=write, 3=access)
-set_hw_watchpoint:
+gdbstub_set_hw_watchpoint:
 	//Check if any of the masked address bits are set. If so, that is an error.
 	movi	a5,0x0000003F
 	xor		a5, a5, a3
@@ -339,9 +338,9 @@ set_hw_watchpoint:
 	ret
 
 
-	.global del_hw_watchpoint
+	.global gdbstub_del_hw_watchpoint
 	//a2 - addr
-del_hw_watchpoint:
+gdbstub_del_hw_watchpoint:
 	//See if the address matches
 	rsr		a3, DBREAKA
 	bne		a3, a2, return_w_error
@@ -362,9 +361,9 @@ return_w_error:
 
 
 //Breakpoint, with an attempt at a functional function prologue and epilogue...
-	.global do_break
+	.global gdbstub_do_break
 	.align	4
-do_break:
+gdbstub_do_break:
 	addi	a1, a1, -16
 	s32i	a15, a1, 12
 	mov		a15, a1
