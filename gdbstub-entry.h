@@ -4,6 +4,7 @@
 void gdbstub_init_debug_entry();
 void gdbstub_do_break();
 void gdbstub_icount_ena_single_step();
+void gdbstub_save_extra_sfrs_for_exception();
 
 int gdbstub_set_hw_breakpoint(int addr, int len);
 int gdbstub_set_hw_watchpoint(int addr, int len, int type);

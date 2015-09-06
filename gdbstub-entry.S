@@ -7,8 +7,16 @@
  *******************************************************************************/
 
 
-#include "xtensa-defs.h"
 #include "gdbstub-cfg.h"
+
+#include <xtensa/config/specreg.h>
+#include <xtensa/config/core-isa.h>
+#include <xtensa/corebits.h>
+
+#define DEBUG_PC	(EPC + XCHAL_DEBUGLEVEL)
+#define DEBUG_EXCSAVE	(EXCSAVE + XCHAL_DEBUGLEVEL)
+#define DEBUG_PS	(EPS + XCHAL_DEBUGLEVEL)
+
 
 .global gdbstub_savedRegs
 .global gdbstub_exceptionStack

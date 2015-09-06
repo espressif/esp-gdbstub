@@ -554,7 +554,7 @@ void gdbstub_handle_user_exception() {
 //Non-OS exception handler. Gets called by the Xtensa HAL.
 static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	//Save the extra registers the Xtensa HAL doesn't save
-	save_extra_sfrs_for_exception();
+	gdbstub_save_extra_sfrs_for_exception();
 	//Copy registers the Xtensa HAL did save to gdbstub_savedRegs
 	os_memcpy(&gdbstub_savedRegs, frame, 19*4);
 	//Credits go to Cesanta for this trick. A1 seems to be destroyed, but because it

@@ -37,6 +37,7 @@ private exception/breakpoint stack, console redirection to GDB, wait till debugg
  * Compile and flash your board.
  * Run gdb, depending on your configuration immediately after resetting the board or after it has run into
 an exception. The easiest way to do it is to use the provided script: xtensa-lx106-elf-gdb -x gdbcmds -b 38400
+Change the '38400' into the baud rate your code uses.
 
 Notes
 -----
