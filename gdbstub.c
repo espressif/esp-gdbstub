@@ -18,6 +18,26 @@
 #include "gdbstub-entry.h"
 #include "gdbstub-cfg.h"
 
+
+//From xtruntime-frames.h
+struct XTensa_exception_frame_s {
+	uint32_t pc;
+	uint32_t ps;
+	uint32_t sar;
+	uint32_t vpri;
+	uint32_t a0;
+	uint32_t a[14]; //a2..a15
+//These are added manually by the exception code; the HAL doesn't set these on an exception.
+	uint32_t litbase;
+	uint32_t sr176;
+	uint32_t sr208;
+	uint32_t a1;
+	 //'reason' is abused for both the debug and the exception vector: if bit 7 is set,
+	//this contains an exception reason, otherwise it contains a debug vector bitmap.
+	uint32_t reason;
+};
+
+
 #ifdef FREERTOS
 /*
 Definitions for FreeRTOS. This redefines some os_* functions to use their non-os* counterparts. It
@@ -44,24 +64,6 @@ void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_excep
 int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
 
 #endif
-
-//From xtruntime-frames.h
-struct XTensa_exception_frame_s {
-	uint32_t pc;
-	uint32_t ps;
-	uint32_t sar;
-	uint32_t vpri;
-	uint32_t a0;
-	uint32_t a[14]; //a2..a15
-//These are added manually by the exception code; the HAL doesn't set these on an exception.
-	uint32_t litbase;
-	uint32_t sr176;
-	uint32_t sr208;
-	uint32_t a1;
-	 //'reason' is abused for both the debug and the exception vector: if bit 7 is set,
-	//this contains an exception reason, otherwise it contains a debug vector bitmap.
-	uint32_t reason;
-};
 
 
 //Not defined in include files.
