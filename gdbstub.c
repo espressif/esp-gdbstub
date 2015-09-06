@@ -11,7 +11,6 @@
 #include "ets_sys.h"
 #include "gpio.h"
 #include "os_type.h"
-#include "user_interface.h"
 #include "mem.h"
 #include "xtensa/corebits.h"
 
@@ -39,6 +38,12 @@ OS-less SDK defines. Defines some headers for things that aren't in the include 
 the xthal stack frame struct.
 */
 #include "osapi.h"
+#include "user_interface.h"
+
+void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
+int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
+
+#endif
 
 //From xtruntime-frames.h
 struct XTensa_exception_frame_s {
@@ -58,10 +63,6 @@ struct XTensa_exception_frame_s {
 	uint32_t reason;
 };
 
-void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
-int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
-
-#endif
 
 //Not defined in include files.
 void xthal_set_intenable(int en);
