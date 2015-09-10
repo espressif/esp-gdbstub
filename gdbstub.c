@@ -522,8 +522,8 @@ static void emulLdSt() {
 //We just caught a debug exception and need to handle it. This is called from an assembly
 //routine in gdbstub-entry.S
 void gdbstub_handle_debug_exception() {
-	xthal_set_intenable(0);
 	ets_wdt_disable();
+
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
 	if ((gdbstub_savedRegs.reason&0x84)==0x4) {
@@ -532,8 +532,8 @@ void gdbstub_handle_debug_exception() {
 		//while we're still in debugger space.
 		emulLdSt();
 	}
+
 	ets_wdt_enable();
-	xthal_set_intenable(1);
 }
 
 
@@ -619,12 +619,13 @@ static void install_exceptions() {
 }
 #endif
 
+
 //gdbstub initialization routine.
 void gdbstub_init() {
 #ifdef REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
 #endif
-//	install_exceptions();
+	install_exceptions();
 	gdbstub_init_debug_entry();
 #ifdef BREAK_ON_INIT
 	gdbstub_do_break();

@@ -52,6 +52,15 @@ We arrive here with all regs intact except for a2. The old contents of A2 are sa
 into the DEBUG_EXCSAVE special function register. EPC is the original PC.
 */
 gdbstub_debug_exception_entry:
+/*
+	//Minimum no-op debug exception handler, for debug
+	rsr a2,DEBUG_PC
+	addi a2,a2,3
+	wsr a2,DEBUG_PC
+	xsr	a2, DEBUG_EXCSAVE
+	rfi	XCHAL_DEBUGLEVEL
+*/
+
 //Save all regs to structure
 	movi	a2, gdbstub_savedRegs
 	s32i	a0, a2, 0x10
