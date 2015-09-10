@@ -9,9 +9,9 @@
 
 #include "gdbstub.h"
 #include "ets_sys.h"
+#include "eagle_soc.h"
 #include "gpio.h"
 #include "os_type.h"
-#include "mem.h"
 #include "xtensa/corebits.h"
 
 #include "gdbstub.h"
@@ -624,7 +624,7 @@ void gdbstub_init() {
 #ifdef REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
 #endif
-	install_exceptions();
+//	install_exceptions();
 	gdbstub_init_debug_entry();
 #ifdef BREAK_ON_INIT
 	gdbstub_do_break();

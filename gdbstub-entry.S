@@ -19,7 +19,10 @@
 
 
 .global gdbstub_savedRegs
+
+#ifdef GDBSTUB_USE_OWN_STACK
 .global gdbstub_exceptionStack
+#endif
 
 	.text
 .literal_position
@@ -126,7 +129,8 @@ DebugExceptionExit:
 //	l32i	a0, a2, 0x54
 //	wsr		a0, 208
 	l32i	a0, a2, 0x50
-	wsr		a0, 176
+	//wsr		a0, 176		//Some versions of gcc do not understand this...
+	.byte  0x00, 176, 0x13	//so we hand-assemble the instruction.
 	l32i	a0, a2, 0x4C
 	wsr		a0, LITBASE
 	l32i	a0, a2, 0x08
