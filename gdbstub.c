@@ -528,8 +528,13 @@ void ATTR_GDBFN gdbstub_handle_debug_exception() {
 		//because it will happily re-trigger the same watchpoint, so we emulate it 
 		//while we're still in debugger space.
 		emulLdSt();
+	} else if ((gdbstub_savedRegs.reason&0x88)==0x8) {
+		//We stopped due to a BREAK instruction. Skip over it.
+		gdbstub_savedRegs.pc+=3;
+	} else if ((gdbstub_savedRegs.reason&0x89)==0x10) {
+		//We stopped due to a BREAK.N instruction. Skip over it.
+		gdbstub_savedRegs.pc+=2;
 	}
-
 	ets_wdt_enable();
 }
 

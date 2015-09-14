@@ -92,15 +92,7 @@ gdbstub_debug_exception_entry:
 	s32i	a0, a2, 0x54
 	rsr		a0, DEBUGCAUSE
 	s32i	a0, a2, 0x5C
-
-//Save DEBUG_PC, but if the instruction is at do_break_breakpoint, skip over the (fixed) break instruction so
-//we will not execute it again after returning.
-//(ToDo: Handle this in C for any break instruction instead of only this one?)
 	rsr		a4, DEBUG_PC
-	movi	a3, do_break_breakpoint
-	bne		a4, a3, is_not_do_break
-	addi	a4, a4, 3
-is_not_do_break:
 	s32i	a4, a2, 0x00
 
 #ifdef GDBSTUB_USE_OWN_STACK
