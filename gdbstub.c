@@ -102,7 +102,7 @@ static int obufpos=0;					//Current position in the buffer
 
 //Small function to feed the hardware watchdog. Needed to stop the ESP from resetting
 //due to a watchdog timeout while reading a command.
-static int keepWDTalive() {
+static int ATTR_GDBFN keepWDTalive() {
 	uint64_t *wdtval=(uint64_t*)0x3ff21048;
 	uint64_t *wdtovf=(uint64_t*)0x3ff210cc;
 	int *wdtctl=(int*)0x3ff210c8;
@@ -111,7 +111,7 @@ static int keepWDTalive() {
 }
 
 //Receive a char from the uart. Uses polling and feeds the watchdog.
-static int ICACHE_FLASH_ATTR gdbRecvChar() {
+static int ATTR_GDBFN gdbRecvChar() {
 	int i;
 	while (((READ_PERI_REG(UART_STATUS(0))>>UART_RXFIFO_CNT_S)&UART_RXFIFO_CNT)==0) {
 		keepWDTalive();
@@ -121,19 +121,19 @@ static int ICACHE_FLASH_ATTR gdbRecvChar() {
 }
 
 //Send a char to the uart.
-static void gdbSendChar(char c) {
+static void ATTR_GDBFN gdbSendChar(char c) {
 	while (((READ_PERI_REG(UART_STATUS(0))>>UART_TXFIFO_CNT_S)&UART_TXFIFO_CNT)>=126) ;
 	WRITE_PERI_REG(UART_FIFO(0), c);
 }
 
 //Send the start of a packet; reset checksum calculation.
-static void gdbPacketStart() {
+static void ATTR_GDBFN gdbPacketStart() {
 	chsum=0;
 	gdbSendChar('$');
 }
 
 //Send a char as part of a packet
-static void gdbPacketChar(char c) {
+static void ATTR_GDBFN gdbPacketChar(char c) {
 	if (c=='#' || c=='$' || c=='}' || c=='*') {
 		gdbSendChar('}');
 		gdbSendChar(c^0x20);
@@ -145,7 +145,7 @@ static void gdbPacketChar(char c) {
 }
 
 //Send a string as part of a packet
-static void gdbPacketStr(char *c) {
+static void ATTR_GDBFN gdbPacketStr(char *c) {
 	while (*c!=0) {
 		gdbPacketChar(*c);
 		c++;
@@ -153,7 +153,7 @@ static void gdbPacketStr(char *c) {
 }
 
 //Send a hex val as part of a packet. 'bits'/4 dictates the number of hex chars sent.
-static void gdbPacketHex(int val, int bits) {
+static void ATTR_GDBFN gdbPacketHex(int val, int bits) {
 	char hexChars[]="0123456789abcdef";
 	int i;
 	for (i=bits; i>0; i-=4) {
@@ -162,7 +162,7 @@ static void gdbPacketHex(int val, int bits) {
 }
 
 //Finish sending a packet.
-static void gdbPacketEnd() {
+static void ATTR_GDBFN gdbPacketEnd() {
 	gdbSendChar('#');
 	gdbPacketHex(chsum, 8);
 }
@@ -177,7 +177,7 @@ static void gdbPacketEnd() {
 //of the hex string, as far as the routine has read into it. Bits/4 indicates
 //the max amount of hex chars it gobbles up. Bits can be -1 to eat up as much
 //hex chars as possible.
-static long gdbGetHexVal(unsigned char **ptr, int bits) {
+static long ATTR_GDBFN gdbGetHexVal(unsigned char **ptr, int bits) {
 	int i;
 	int no;
 	unsigned int v=0;
@@ -214,7 +214,7 @@ static long gdbGetHexVal(unsigned char **ptr, int bits) {
 }
 
 //Swap an int into the form gdb wants it
-static int iswap(int i) {
+static int ATTR_GDBFN iswap(int i) {
 	int r;
 	r=((i>>24)&0xff);
 	r|=((i>>16)&0xff)<<8;
@@ -224,14 +224,14 @@ static int iswap(int i) {
 }
 
 //Read a byte from the ESP8266 memory.
-static unsigned char readbyte(unsigned int p) {
+static unsigned char ATTR_GDBFN readbyte(unsigned int p) {
 	int *i=(int*)(p&(~3));
 	if (p<0x20000000 || p>=0x60000000) return -1;
 	return *i>>((p&3)*8);
 }
 
 //Write a byte to the ESP8266 memory.
-static void writeByte(unsigned int p, unsigned char d) {
+static void ATTR_GDBFN writeByte(unsigned int p, unsigned char d) {
 	int *i=(int*)(p&(~3));
 	if (p<0x20000000 || p>=0x60000000) return;
 	if ((p&3)==0) *i=(*i&0xffffff00)|(d<<0);
@@ -259,7 +259,7 @@ struct regfile {
 
 
 //Send the reason execution is stopped to GDB.
-static void sendReason() {
+static void ATTR_GDBFN sendReason() {
 	char *reason=""; //default
 	//exception-to-signal mapping
 	char exceptionSignal[]={4,31,11,11,2,6,8,0,6,7,0,0,7,7,7,7};
@@ -290,7 +290,7 @@ static void sendReason() {
 }
 
 //Handle a command as received from GDB.
-static int gdbHandleCommand(unsigned char *cmd, int len) {
+static int ATTR_GDBFN gdbHandleCommand(unsigned char *cmd, int len) {
 	//Handle a command
 	int i, j, k;
 	unsigned char *data=cmd+1;
@@ -429,7 +429,7 @@ static int gdbHandleCommand(unsigned char *cmd, int len) {
 //Returns ST_OK on success, ST_ERR when checksum fails, a 
 //character if it is received instead of the GDB packet
 //start char.
-static int gdbReadCommand() {
+static int ATTR_GDBFN gdbReadCommand() {
 	unsigned char c;
 	unsigned char chsum=0, rchsum;
 	unsigned char sentchs[2];
@@ -474,14 +474,14 @@ static int gdbReadCommand() {
 }
 
 //Get the value of one of the A registers
-static unsigned int getaregval(int reg) {
+static unsigned int ATTR_GDBFN getaregval(int reg) {
 	if (reg==0) return gdbstub_savedRegs.a0;
 	if (reg==1) return gdbstub_savedRegs.a1;
 	return gdbstub_savedRegs.a[reg-2];
 }
 
 //Set the value of one of the A registers
-static void setaregval(int reg, unsigned int val) {
+static void ATTR_GDBFN setaregval(int reg, unsigned int val) {
 	os_printf("%x -> %x\n", val, reg);
 	if (reg==0) gdbstub_savedRegs.a0=val;
 	if (reg==1) gdbstub_savedRegs.a1=val;
@@ -489,7 +489,7 @@ static void setaregval(int reg, unsigned int val) {
 }
 
 //Emulate the l32i/s32i instruction we're stopped at.
-static void emulLdSt() {
+static void ATTR_GDBFN emulLdSt() {
 	unsigned char i0=readbyte(gdbstub_savedRegs.pc);
 	unsigned char i1=readbyte(gdbstub_savedRegs.pc+1);
 	unsigned char i2=readbyte(gdbstub_savedRegs.pc+2);
@@ -521,7 +521,7 @@ static void emulLdSt() {
 
 //We just caught a debug exception and need to handle it. This is called from an assembly
 //routine in gdbstub-entry.S
-void gdbstub_handle_debug_exception() {
+void ATTR_GDBFN gdbstub_handle_debug_exception() {
 	ets_wdt_disable();
 
 	sendReason();
@@ -539,20 +539,18 @@ void gdbstub_handle_debug_exception() {
 
 #ifdef FREERTOS
 //Freetos exception. This routine is called by an assembly routine in gdbstub-entry.S
-void gdbstub_handle_user_exception() {
-	xthal_set_intenable(0);
+void ATTR_GDBFN gdbstub_handle_user_exception() {
 	ets_wdt_disable();
 	gdbstub_savedRegs.reason|=0x80; //mark as an exception reason
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
 	ets_wdt_enable();
-	xthal_set_intenable(1);
 }
 #else
 
 #define EXCEPTION_GDB_SP_OFFSET 0x100
 //Non-OS exception handler. Gets called by the Xtensa HAL.
-static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
+static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	//Save the extra registers the Xtensa HAL doesn't save
 	gdbstub_save_extra_sfrs_for_exception();
 	//Copy registers the Xtensa HAL did save to gdbstub_savedRegs
@@ -578,7 +576,7 @@ static void gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 #ifdef REDIRECT_CONSOLE_OUTPUT
 //Replacement putchar1 routine. Instead of spitting out the character directly, it will buffer up to
 //OBUFLEN characters (or up to a \n, whichever comes earlier) and send it out as a gdb stdout packet.
-static void gdb_semihost_putchar1(char c) {
+static void ATTR_GDBFN gdb_semihost_putchar1(char c) {
 	int i;
 	obuf[obufpos++]=c;
 	if (c=='\n' || obufpos==OBUFLEN) {
@@ -594,7 +592,7 @@ static void gdb_semihost_putchar1(char c) {
 #ifndef FREERTOS
 //The OS-less SDK uses the Xtensa HAL to handle exceptions. We can use those functions to catch any 
 //fatal exceptions and invoke the debugger when this happens.
-static void install_exceptions() {
+static void ATTR_GDBINIT install_exceptions() {
 	int i;
 	int exno[]={EXCCAUSE_ILLEGAL, EXCCAUSE_SYSCALL, EXCCAUSE_INSTR_ERROR, EXCCAUSE_LOAD_STORE_ERROR,
 			EXCCAUSE_DIVIDE_BY_ZERO, EXCCAUSE_UNALIGNED, EXCCAUSE_INSTR_DATA_ERROR, EXCCAUSE_LOAD_STORE_DATA_ERROR, 
@@ -611,7 +609,7 @@ static void install_exceptions() {
 extern void user_fatal_exception_handler();
 extern void gdbstub_user_exception_entry();
 
-static void install_exceptions() {
+static void ATTR_GDBINIT install_exceptions() {
 	//Replace the user_fatal_exception_handler by a jump to our own code
 	int *ufe=(int*)user_fatal_exception_handler;
 	//This mess encodes as a relative jump instruction to user_fatal_exception_handler
@@ -621,7 +619,7 @@ static void install_exceptions() {
 
 
 //gdbstub initialization routine.
-void gdbstub_init() {
+void ATTR_GDBINIT gdbstub_init() {
 #ifdef REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
 #endif

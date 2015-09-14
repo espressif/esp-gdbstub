@@ -5,7 +5,7 @@
 Enable this define if you're using the RTOS SDK. It will use a custom exception handler instead of the HAL
 and do some other magic to make everything work and compile under FreeRTOS.
 */
-#define FREERTOS
+//#define FREERTOS
 
 /*
 Enable this to make the exception and debugging handlers switch to a private stack. This will use 
@@ -29,6 +29,18 @@ Enable this if you want the GDB stub to wait for you to attach GDB before runnin
 breaking in the init routine; use the gdb 'c' command (continue) to start the program.
 */
 #define BREAK_ON_INIT
+
+
+/*
+Function attributes for function types.
+Gdbstub functions are placed in flash or IRAM using attributes, as defined here. The gdbinit function
+(and related) can always be in flash, because it's called in the normal code flow. The rest of the
+gdbstub functions can be in flash too, but only if there's no chance of them being called when the
+flash somehow is disabled (eg during SPI operations or flash write/erase operations). If this
+does happen, the ESP8266 will most likely crash.
+*/
+#define ATTR_GDBINIT	ICACHE_FLASH_ATTR
+#define ATTR_GDBFN		
 
 #endif
 
