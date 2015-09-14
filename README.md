@@ -48,6 +48,11 @@ breakpoint ('hbr').
 the UART interrupt. You can add this yourself by calling gdbstub_do_break if you receive a character with
 value 0x03.
  * Continuing from an exception is not (yet) supported in FreeRTOS mode.
+ * The WiFi hardware is designed to be serviced by software periodically. It has some buffers so it
+will behave OK when some data comes in while the processor is busy, but these buffers are not infinite.
+If the WiFi hardware receives lots of data while the debugger has stopped the CPU, it is bound
+to crash. This will happen mostly when working with UDP and/or ICMP; TCP-connections in general will
+not send much more data when the other side doesn't send any ACKs.
 
 License
 -------
@@ -56,6 +61,6 @@ THis gdbstub is licensed under the Espressif MIT license, as described in the Li
 
 Thanks
 ------
- * Cesanta, for their initial ESP8266 exception handling only gdbstub
- * jcmvbkbc, for providing an incompatible but interesting gdbstub for other Xtensa CPUs
-
+ * Cesanta, for their initial ESP8266 exception handling only gdbstub,
+ * jcmvbkbc, for providing an incompatible but interesting gdbstub for other Xtensa CPUs,
+ * Sysprogs (makers of VisualGDB), for their suggestions and bugreports.
