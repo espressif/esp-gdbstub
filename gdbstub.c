@@ -66,9 +66,6 @@ int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 
 #endif
 
 
-//Not defined in include files.
-void xthal_set_intenable(int en);
-
 
 //We need some UART register defines.
 #define REG_UART_BASE( i )  (0x60000000+(i)*0xf00)
@@ -561,12 +558,10 @@ static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *fr
 
 	gdbstub_savedRegs.reason|=0x80; //mark as an exception reason
 
-	xthal_set_intenable(0);
 	ets_wdt_disable();
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
 	ets_wdt_enable();
-	xthal_set_intenable(1);
 
 	//Copy any changed registers back to the frame the Xtensa HAL uses.
 	os_memcpy(frame, &gdbstub_savedRegs, 19*4);
