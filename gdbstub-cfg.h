@@ -15,6 +15,14 @@ stops when you run into an error in your code, try enabling this.
 */
 //#define GDBSTUB_USE_OWN_STACK
 
+/*
+If this is defined, gdbstub will break the program when you press Ctrl-C in gdb. it does this by
+hooking the UART interrupt. Unfortunately, this means receiving stuff over the serial port won't
+work for your program anymore. This will fail if your program sets an UART interrupt handler after
+the gdbstub_init call.
+*/
+#define GDBSTUB_CTRLC_BREAK
+
 
 /*
 Enabling this will redirect console output to GDB. This basically means that printf/os_printf output 

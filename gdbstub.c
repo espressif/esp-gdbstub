@@ -75,6 +75,16 @@ int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 
 #define UART_TXFIFO_CNT 0x000000FF
 #define UART_TXFIFO_CNT_S                   16
 #define UART_FIFO( i )                          (REG_UART_BASE( i ) + 0x0)
+#define ETS_UART_INUM 5
+#define UART_INT_ENA(i)                     (REG_UART_BASE(i) + 0xC)
+#define UART_INT_CLR(i)                 (REG_UART_BASE(i) + 0x10)
+#define UART_RXFIFO_TOUT_INT_ENA            (BIT(8))
+#define UART_RXFIFO_FULL_INT_ENA            (BIT(0))
+#define UART_RXFIFO_TOUT_INT_CLR            (BIT(8))
+#define UART_RXFIFO_FULL_INT_CLR            (BIT(0))
+
+
+
 
 //Length of buffer used to reserve GDB commands. Has to be at least able to fit the G command, which
 //implies a minimum size of about 190 bytes.
@@ -263,7 +273,9 @@ static void ATTR_GDBFN sendReason() {
 	int i=0;
 	gdbPacketStart();
 	gdbPacketChar('T');
-	if (gdbstub_savedRegs.reason&0x80) {
+	if (gdbstub_savedRegs.reason==0xff) {
+		gdbPacketHex(2, 8); //sigint
+	} else if (gdbstub_savedRegs.reason&0x80) {
 		//We stopped because of an exception. Convert exception code to a signal number and send it.
 		i=gdbstub_savedRegs.reason&0x7f;
 		if (i<sizeof(exceptionSignal)) return gdbPacketHex(exceptionSignal[i], 8); else gdbPacketHex(11, 8);
@@ -618,10 +630,59 @@ static void ATTR_GDBINIT install_exceptions() {
 #endif
 
 
+
+#ifdef GDBSTUB_CTRLC_BREAK
+
+#ifndef FREERTOS
+
+static void ATTR_GDBFN uart_hdlr(void *arg, void *frame) {
+	int doDebug=0, fifolen=0;
+	//Save the extra registers the Xtensa HAL doesn't save
+	gdbstub_save_extra_sfrs_for_exception();
+
+	fifolen=(READ_PERI_REG(UART_STATUS(0))>>UART_RXFIFO_CNT_S)&UART_RXFIFO_CNT;
+	while (fifolen!=0) {
+		if ((READ_PERI_REG(UART_FIFO(0)) & 0xFF)==0x3) doDebug=1; //Check if any of the chars is control-C. Throw away rest.
+		fifolen--;
+	}
+	WRITE_PERI_REG(UART_INT_CLR(0), UART_RXFIFO_FULL_INT_CLR|UART_RXFIFO_TOUT_INT_CLR);
+
+	if (doDebug) {
+		//Copy registers the Xtensa HAL did save to gdbstub_savedRegs
+		os_memcpy(&gdbstub_savedRegs, frame, 19*4);
+		gdbstub_savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
+	
+		gdbstub_savedRegs.reason=0xff; //mark as user break reason
+	
+		ets_wdt_disable();
+		sendReason();
+		while(gdbReadCommand()!=ST_CONT);
+		ets_wdt_enable();
+		//Copy any changed registers back to the frame the Xtensa HAL uses.
+		os_memcpy(frame, &gdbstub_savedRegs, 19*4);
+	}
+}
+
+static void ATTR_GDBINIT install_uart_hdlr() {
+	ets_isr_attach(ETS_UART_INUM, uart_hdlr, NULL);
+	SET_PERI_REG_MASK(UART_INT_ENA(0), UART_RXFIFO_FULL_INT_ENA|UART_RXFIFO_TOUT_INT_ENA);
+	ets_isr_unmask((1<<ETS_UART_INUM)); //enable uart interrupt
+}
+
+#endif
+
+
+#endif
+
+
+
 //gdbstub initialization routine.
 void ATTR_GDBINIT gdbstub_init() {
 #ifdef REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
+#endif
+#ifdef GDBSTUB_CTRLC_BREAK
+	install_uart_hdlr();
 #endif
 	install_exceptions();
 	gdbstub_init_debug_entry();
