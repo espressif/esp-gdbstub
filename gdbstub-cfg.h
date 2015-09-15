@@ -5,7 +5,7 @@
 Enable this define if you're using the RTOS SDK. It will use a custom exception handler instead of the HAL
 and do some other magic to make everything work and compile under FreeRTOS.
 */
-//#define FREERTOS
+#define FREERTOS
 
 /*
 Enable this to make the exception and debugging handlers switch to a private stack. This will use 

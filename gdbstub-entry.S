@@ -243,6 +243,19 @@ is still something we need to implement later, if there's any demand for it, or 
 FreeRTOS to allow this in the future. (Which will then kill backwards compatibility... hmmm.)
 */
 	j UserExceptionExit
+
+
+	.global gdbstub_handle_uart_int
+	.global gdbstub_uart_entry
+	.align	4
+gdbstub_uart_entry:
+	//On entry, the stack frame is at SP+16.
+	//This is a small stub to present that as the first arg to the gdbstub_handle_uart function.
+	movi	a2, 16
+	add		a2, a2, a1
+	movi	a3, gdbstub_handle_uart_int
+	jx		a3
+
 #endif
 
 

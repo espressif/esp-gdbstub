@@ -38,6 +38,14 @@ struct XTensa_exception_frame_s {
 };
 
 
+struct XTensa_rtos_int_frame_s {
+	uint32_t exitPtr;
+	uint32_t pc;
+	uint32_t ps;
+	uint32_t a[16];
+	uint32_t sar;
+};
+
 #ifdef FREERTOS
 /*
 Definitions for FreeRTOS. This redefines some os_* functions to use their non-os* counterparts. It
@@ -65,9 +73,11 @@ int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 
 
 #endif
 
+#define EXCEPTION_GDB_SP_OFFSET 0x100
 
 
 //We need some UART register defines.
+#define ETS_UART_INUM 5
 #define REG_UART_BASE( i )  (0x60000000+(i)*0xf00)
 #define UART_STATUS( i )                        (REG_UART_BASE( i ) + 0x1C)
 #define UART_RXFIFO_CNT 0x000000FF
@@ -75,7 +85,6 @@ int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 
 #define UART_TXFIFO_CNT 0x000000FF
 #define UART_TXFIFO_CNT_S                   16
 #define UART_FIFO( i )                          (REG_UART_BASE( i ) + 0x0)
-#define ETS_UART_INUM 5
 #define UART_INT_ENA(i)                     (REG_UART_BASE(i) + 0xC)
 #define UART_INT_CLR(i)                 (REG_UART_BASE(i) + 0x10)
 #define UART_RXFIFO_TOUT_INT_ENA            (BIT(8))
@@ -562,7 +571,6 @@ void ATTR_GDBFN gdbstub_handle_user_exception() {
 }
 #else
 
-#define EXCEPTION_GDB_SP_OFFSET 0x100
 //Non-OS exception handler. Gets called by the Xtensa HAL.
 static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *frame) {
 	//Save the extra registers the Xtensa HAL doesn't save
@@ -669,8 +677,52 @@ static void ATTR_GDBINIT install_uart_hdlr() {
 	ets_isr_unmask((1<<ETS_UART_INUM)); //enable uart interrupt
 }
 
-#endif
+#else
 
+void ATTR_GDBFN gdbstub_handle_uart_int(struct XTensa_rtos_int_frame_s *frame) {
+	int doDebug=0, fifolen=0, x;
+
+	fifolen=(READ_PERI_REG(UART_STATUS(0))>>UART_RXFIFO_CNT_S)&UART_RXFIFO_CNT;
+	while (fifolen!=0) {
+		if ((READ_PERI_REG(UART_FIFO(0)) & 0xFF)==0x3) doDebug=1; //Check if any of the chars is control-C. Throw away rest.
+		fifolen--;
+	}
+	WRITE_PERI_REG(UART_INT_CLR(0), UART_RXFIFO_FULL_INT_CLR|UART_RXFIFO_TOUT_INT_CLR);
+
+	if (doDebug) {
+		//Copy registers the Xtensa HAL did save to gdbstub_savedRegs
+		gdbstub_savedRegs.pc=frame->pc;
+		gdbstub_savedRegs.ps=frame->ps;
+		gdbstub_savedRegs.sar=frame->sar;
+		gdbstub_savedRegs.a0=frame->a[0];
+		gdbstub_savedRegs.a1=frame->a[1];
+		for (x=2; x<16; x++) gdbstub_savedRegs.a[x-2]=frame->a[x];
+
+//		gdbstub_savedRegs.a1=(uint32_t)frame+EXCEPTION_GDB_SP_OFFSET;
+	
+		gdbstub_savedRegs.reason=0xff; //mark as user break reason
+	
+//		ets_wdt_disable();
+		sendReason();
+		while(gdbReadCommand()!=ST_CONT);
+//		ets_wdt_enable();
+		//Copy any changed registers back to the frame the Xtensa HAL uses.
+		frame->pc=gdbstub_savedRegs.pc;
+		frame->ps=gdbstub_savedRegs.ps;
+		frame->sar=gdbstub_savedRegs.sar;
+		frame->a[0]=gdbstub_savedRegs.a0;
+		frame->a[1]=gdbstub_savedRegs.a1;
+		for (x=2; x<16; x++) frame->a[x]=gdbstub_savedRegs.a[x-2];
+	}
+}
+
+static void ATTR_GDBINIT install_uart_hdlr() {
+	_xt_isr_attach(ETS_UART_INUM, gdbstub_uart_entry);
+	SET_PERI_REG_MASK(UART_INT_ENA(0), UART_RXFIFO_FULL_INT_ENA|UART_RXFIFO_TOUT_INT_ENA);
+	_xt_isr_unmask((1<<ETS_UART_INUM)); //enable uart interrupt
+}
+
+#endif
 
 #endif
 
