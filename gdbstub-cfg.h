@@ -38,14 +38,14 @@ breaking in the init routine; use the gdb 'c' command (continue) to start the pr
 */
 #define BREAK_ON_INIT
 
-
 /*
 Function attributes for function types.
 Gdbstub functions are placed in flash or IRAM using attributes, as defined here. The gdbinit function
 (and related) can always be in flash, because it's called in the normal code flow. The rest of the
 gdbstub functions can be in flash too, but only if there's no chance of them being called when the
-flash somehow is disabled (eg during SPI operations or flash write/erase operations). If this
-does happen, the ESP8266 will most likely crash.
+flash somehow is disabled (eg during SPI operations or flash write/erase operations). If the routines
+are called when the flash is disabled (eg due to a Ctrl-C at the wrong time), the ESP8266 will most 
+likely crash.
 */
 #define ATTR_GDBINIT	ICACHE_FLASH_ATTR
 #define ATTR_GDBFN		

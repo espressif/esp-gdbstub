@@ -300,7 +300,7 @@ gdbstub_init_debug_entry:
 	.global gdbstub_icount_ena_single_step
 	.align 4
 gdbstub_icount_ena_single_step:
-	movi	a2, XCHAL_DEBUGLEVEL
+	movi	a2, 1 //Only count steps in non-exception mode
 	wsr		a2, ICOUNTLEVEL
 	movi	a2, 0xfffffffe
 	wsr		a2, ICOUNT
@@ -387,6 +387,7 @@ return_w_error:
 
 
 //Breakpoint, with an attempt at a functional function prologue and epilogue...
+	.global gdbstub_do_break_breakpoint_addr
 	.global gdbstub_do_break
 	.align	4
 gdbstub_do_break:
@@ -394,7 +395,7 @@ gdbstub_do_break:
 	s32i	a15, a1, 12
 	mov		a15, a1
 
-do_break_breakpoint:
+gdbstub_do_break_breakpoint_addr:
 	break 0,0
 
 	mov		a1, a15

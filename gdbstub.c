@@ -10,8 +10,8 @@
 #include "gdbstub.h"
 #include "ets_sys.h"
 #include "eagle_soc.h"
+#include "c_types.h"
 #include "gpio.h"
-#include "os_type.h"
 #include "xtensa/corebits.h"
 
 #include "gdbstub.h"
@@ -256,6 +256,13 @@ static void ATTR_GDBFN writeByte(unsigned int p, unsigned char d) {
 	if ((p&3)==3) *i=(*i&0x00ffffff)|(d<<24);
 }
 
+//Returns 1 if it makes sense to write to addr p
+static int ATTR_GDBFN validWrAddr(int p) {
+	if (p>=0x3ff00000 && p<0x40000000) return 1;
+	if (p>=0x40100000 && p<0x40140000) return 1;
+	if (p>=0x60000000 && p<0x60002000) return 1;
+	return 0;
+}
 
 /* 
 Register file in the format lx106 gdb port expects it.
@@ -351,13 +358,22 @@ static int ATTR_GDBFN gdbHandleCommand(unsigned char *cmd, int len) {
 		data++; //skip ,
 		j=gdbGetHexVal(&data, -1); //length
 		data++; //skip :
-		for (k=0; k<j; k++) {
-			writeByte(i, gdbGetHexVal(&data, 8));
-			i++;
+		if (validWrAddr(i) && validWrAddr(i+j)) {
+			for (k=0; k<j; k++) {
+				writeByte(i, gdbGetHexVal(&data, 8));
+				i++;
+			}
+			//Make sure caches are up-to-date. Procedure according to Xtensa ISA document, ISYNC inst desc.
+			asm volatile("ISYNC\nISYNC\n");
+			gdbPacketStart();
+			gdbPacketStr("OK");
+			gdbPacketEnd();
+		} else {
+			//Trying to do a software breakpoint on a flash proc, perhaps?
+			gdbPacketStart();
+			gdbPacketStr("E01");
+			gdbPacketEnd();
 		}
-		gdbPacketStart();
-		gdbPacketStr("OK");
-		gdbPacketEnd();
 	} else if (cmd[0]=='?') {	//Reply with stop reason
 		sendReason();
 //	} else if (strncmp(cmd, "vCont?", 6)==0) {
@@ -551,10 +567,20 @@ void ATTR_GDBFN gdbstub_handle_debug_exception() {
 		emulLdSt();
 	} else if ((gdbstub_savedRegs.reason&0x88)==0x8) {
 		//We stopped due to a BREAK instruction. Skip over it.
-		gdbstub_savedRegs.pc+=3;
-	} else if ((gdbstub_savedRegs.reason&0x89)==0x10) {
-		//We stopped due to a BREAK.N instruction. Skip over it.
-		gdbstub_savedRegs.pc+=2;
+		//Check the instruction first; gdb may have replaced it with the original instruction
+		//if it's one of the breakpoints it set.
+		if (readbyte(gdbstub_savedRegs.pc+2)==0 &&
+					(readbyte(gdbstub_savedRegs.pc+1)&0xf0)==0x40 &&
+					(readbyte(gdbstub_savedRegs.pc)&0x0f)==0x00) {
+			gdbstub_savedRegs.pc+=3;
+		}
+	} else if ((gdbstub_savedRegs.reason&0x90)==0x10) {
+		//We stopped due to a BREAK.N instruction. Skip over it, after making sure the instruction
+		//actually is a BREAK.N
+		if ((readbyte(gdbstub_savedRegs.pc+1)&0xf0)==0xf0 &&
+					readbyte(gdbstub_savedRegs.pc)==0x2d) {
+			gdbstub_savedRegs.pc+=3;
+		}
 	}
 	ets_wdt_enable();
 }
