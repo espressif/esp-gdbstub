@@ -46,7 +46,7 @@ struct XTensa_rtos_int_frame_s {
 	uint32_t sar;
 };
 
-#ifdef FREERTOS
+#if GDBSTUB_FREERTOS
 /*
 Definitions for FreeRTOS. This redefines some os_* functions to use their non-os* counterparts. It
 also sets up some function pointers for ROM functions that aren't in the FreeRTOS ld files.
@@ -103,7 +103,7 @@ int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 
 
 //The asm stub saves the Xtensa registers here when a debugging exception happens.
 struct XTensa_exception_frame_s gdbstub_savedRegs;
-#ifdef GDBSTUB_USE_OWN_STACK
+#if GDBSTUB_USE_OWN_STACK
 //This is the debugging exception stack.
 int exceptionStack[256];
 #endif
@@ -111,7 +111,7 @@ int exceptionStack[256];
 static unsigned char cmd[PBUFLEN];		//GDB command input buffer
 static struct regfile currRegs;			//Registers will be saved here on a (debugging or normal) exception.
 static char chsum;						//Running checksum of the output packet
-#ifdef REDIRECT_CONSOLE_OUTPUT
+#if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 static unsigned char obuf[OBUFLEN];		//GDB stdout buffer
 static int obufpos=0;					//Current position in the buffer
 #endif
@@ -586,7 +586,7 @@ void ATTR_GDBFN gdbstub_handle_debug_exception() {
 }
 
 
-#ifdef FREERTOS
+#if GDBSTUB_FREERTOS
 //Freetos exception. This routine is called by an assembly routine in gdbstub-entry.S
 void ATTR_GDBFN gdbstub_handle_user_exception() {
 	ets_wdt_disable();
@@ -619,7 +619,7 @@ static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *fr
 }
 #endif
 
-#ifdef REDIRECT_CONSOLE_OUTPUT
+#if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 //Replacement putchar1 routine. Instead of spitting out the character directly, it will buffer up to
 //OBUFLEN characters (or up to a \n, whichever comes earlier) and send it out as a gdb stdout packet.
 static void ATTR_GDBFN gdb_semihost_putchar1(char c) {
@@ -635,7 +635,7 @@ static void ATTR_GDBFN gdb_semihost_putchar1(char c) {
 }
 #endif
 
-#ifndef FREERTOS
+#if !GDBSTUB_FREERTOS
 //The OS-less SDK uses the Xtensa HAL to handle exceptions. We can use those functions to catch any 
 //fatal exceptions and invoke the debugger when this happens.
 static void ATTR_GDBINIT install_exceptions() {
@@ -665,9 +665,9 @@ static void ATTR_GDBINIT install_exceptions() {
 
 
 
-#ifdef GDBSTUB_CTRLC_BREAK
+#if GDBSTUB_CTRLC_BREAK
 
-#ifndef FREERTOS
+#if !GDBSTUB_FREERTOS
 
 static void ATTR_GDBFN uart_hdlr(void *arg, void *frame) {
 	int doDebug=0, fifolen=0;
@@ -756,15 +756,15 @@ static void ATTR_GDBINIT install_uart_hdlr() {
 
 //gdbstub initialization routine.
 void ATTR_GDBINIT gdbstub_init() {
-#ifdef REDIRECT_CONSOLE_OUTPUT
+#if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
 #endif
-#ifdef GDBSTUB_CTRLC_BREAK
+#if GDBSTUB_CTRLC_BREAK
 	install_uart_hdlr();
 #endif
 	install_exceptions();
 	gdbstub_init_debug_entry();
-#ifdef BREAK_ON_INIT
+#if GDBSTUB_BREAK_ON_INIT
 	gdbstub_do_break();
 #endif
 }

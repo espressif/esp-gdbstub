@@ -20,7 +20,7 @@
 
 .global gdbstub_savedRegs
 
-#ifdef GDBSTUB_USE_OWN_STACK
+#if GDBSTUB_USE_OWN_STACK
 .global gdbstub_exceptionStack
 #endif
 
@@ -95,7 +95,7 @@ gdbstub_debug_exception_entry:
 	rsr		a4, DEBUG_PC
 	s32i	a4, a2, 0x00
 
-#ifdef GDBSTUB_USE_OWN_STACK
+#if GDBSTUB_USE_OWN_STACK
 	//Move to our own stack
 	movi a1, exceptionStack+255*4
 #endif
@@ -165,7 +165,7 @@ DebugExceptionExit:
 
 
 
-#ifdef FREERTOS
+#if GDBSTUB_FREERTOS
 /*
 FreeRTOS exception handling code. For some reason or another, we can't just hook the main exception vector: it
 seems FreeRTOS uses that for something else too (interrupts). FreeRTOS has its own fatal exception handler, and we
@@ -223,7 +223,7 @@ gdbstub_user_exception_entry:
 	l32i	a3, a1, 4
 	s32i	a3, a0, 0x00
 
-#ifdef GDBSTUB_USE_OWN_STACK
+#if GDBSTUB_USE_OWN_STACK
 	movi a1, exceptionStack+255*4
 #endif
 
