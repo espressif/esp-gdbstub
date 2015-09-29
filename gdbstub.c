@@ -53,6 +53,8 @@ also sets up some function pointers for ROM functions that aren't in the FreeRTO
 */
 #include <string.h>
 #include <stdio.h>
+void _xt_isr_attach(int inum, void *fn);
+void _xt_isr_unmask(int inum);
 void os_install_putc1(void (*p)(char c));
 #define os_printf(...) printf(__VA_ARGS__)
 #define os_memcpy(a,b,c) memcpy(a,b,c)
@@ -109,7 +111,6 @@ int exceptionStack[256];
 #endif
 
 static unsigned char cmd[PBUFLEN];		//GDB command input buffer
-static struct regfile currRegs;			//Registers will be saved here on a (debugging or normal) exception.
 static char chsum;						//Running checksum of the output packet
 #if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 static unsigned char obuf[OBUFLEN];		//GDB stdout buffer
@@ -118,7 +119,7 @@ static int obufpos=0;					//Current position in the buffer
 
 //Small function to feed the hardware watchdog. Needed to stop the ESP from resetting
 //due to a watchdog timeout while reading a command.
-static int ATTR_GDBFN keepWDTalive() {
+static void ATTR_GDBFN keepWDTalive() {
 	uint64_t *wdtval=(uint64_t*)0x3ff21048;
 	uint64_t *wdtovf=(uint64_t*)0x3ff210cc;
 	int *wdtctl=(int*)0x3ff210c8;
@@ -283,7 +284,9 @@ struct regfile {
 
 //Send the reason execution is stopped to GDB.
 static void ATTR_GDBFN sendReason() {
+#if 0
 	char *reason=""; //default
+#endif
 	//exception-to-signal mapping
 	char exceptionSignal[]={4,31,11,11,2,6,8,0,6,7,0,0,7,7,7,7};
 	int i=0;
@@ -380,13 +383,13 @@ static int ATTR_GDBFN gdbHandleCommand(unsigned char *cmd, int len) {
 //		gdbPacketStart();
 //		gdbPacketStr("vCont;c;s");
 //		gdbPacketEnd();
-	} else if (strncmp(cmd, "vCont;c", 7)==0 || cmd[0]=='c') {	//continue execution
+	} else if (strncmp((char*)cmd, "vCont;c", 7)==0 || cmd[0]=='c') {	//continue execution
 		return ST_CONT;
-	} else if (strncmp(cmd, "vCont;s", 7)==0 || cmd[0]=='s') {	//single-step instruction
+	} else if (strncmp((char*)cmd, "vCont;s", 7)==0 || cmd[0]=='s') {	//single-step instruction
 		gdbstub_icount_ena_single_step();
 		return ST_CONT;
 	} else if (cmd[0]=='q') {	//Extended query
-		if (strncmp(&cmd[1], "Supported", 9)==0) { //Capabilities query
+		if (strncmp((char*)&cmd[1], "Supported", 9)==0) { //Capabilities query
 			gdbPacketStart();
 			gdbPacketStr("swbreak+;hwbreak+;PacketSize=255");
 			gdbPacketEnd();
