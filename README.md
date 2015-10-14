@@ -47,9 +47,9 @@ Notes
  * Using software breakpoints ('br') only works on code that's in RAM. Code in flash can only have a hardware
 breakpoint ('hbr').
  * Due to hardware limitations, only one hardware breakpount and one hardware watchpoint are available.
- * Pressing control-C to interrupt the running program does not work (yet) because there's no code to hook
-the UART interrupt. You can add this yourself by calling gdbstub_do_break if you receive a character with
-value 0x03.
+ * Pressing control-C to interrupt the running program depends on gdbstub hooking the UART interrupt.
+If some code re-hooks this afterwards, gdbstub won't be able to receive characters. If gdbstub handles
+the interrupt, the user code will not receive any characters.
  * Continuing from an exception is not (yet) supported in FreeRTOS mode.
  * The WiFi hardware is designed to be serviced by software periodically. It has some buffers so it
 will behave OK when some data comes in while the processor is busy, but these buffers are not infinite.
