@@ -30,20 +30,23 @@ in Git.
  * Modify your Makefile. You'll need to include the gdbstub sources: if your Makefile is structured like the
 ones in the Espressif examples, you can add `gdbstub` to the `SUBDIRS` define and `gdbstub/libgdbstub.a` to the
 `COMPONENTS_eagle.app.v6` define. Also, you probably want to add `-ggdb` to your compiler flags (`TARGET_LDFLAGS`)
-and, if you are debugging, change any optimation flags (-Os, -O2 etc) into `-Og`.
+and, if you are debugging, change any optimation flags (-Os, -O2 etc) into `-Og`. Finally, make sure your Makefile
+also compiles .S files.
  * Configure gdbstub by editting `gdbstub-cfg.h`. There are a bunch of options you can tweak: FreeRTOS or bare SDK,
-private exception/breakpoint stack, console redirection to GDB, wait till debugger attachment etc.
+private exception/breakpoint stack, console redirection to GDB, wait till debugger attachment etc. You can also
+configure the options by including the proper -Dwhatever gcc flags in your Makefiles.
  * In your user_main.c, add an `#include <../gdbstub/gdbstub.h>` and call `gdbstub_init();` somewhere in user_main.
  * Compile and flash your board.
  * Run gdb, depending on your configuration immediately after resetting the board or after it has run into
 an exception. The easiest way to do it is to use the provided script: xtensa-lx106-elf-gdb -x gdbcmds -b 38400
-Change the '38400' into the baud rate your code uses.
+Change the '38400' into the baud rate your code uses. You may need to change the gdbcmds script to fit the
+configuration of your hardware and build environment.
 
 Notes
 -----
  * Using software breakpoints ('br') only works on code that's in RAM. Code in flash can only have a hardware
 breakpoint ('hbr').
- * Due to hardware limitations, only one hardware breakpount and one hardware watchpoint are available
+ * Due to hardware limitations, only one hardware breakpount and one hardware watchpoint are available.
  * Pressing control-C to interrupt the running program does not work (yet) because there's no code to hook
 the UART interrupt. You can add this yourself by calling gdbstub_do_break if you receive a character with
 value 0x03.
@@ -56,7 +59,7 @@ not send much more data when the other side doesn't send any ACKs.
 
 License
 -------
-THis gdbstub is licensed under the Espressif MIT license, as described in the License file.
+This gdbstub is licensed under the Espressif MIT license, as described in the License file.
 
 
 Thanks
