@@ -300,9 +300,9 @@ gdbstub_init_debug_entry:
 	.global gdbstub_icount_ena_single_step
 	.align 4
 gdbstub_icount_ena_single_step:
-	movi	a2, 1 //Only count steps in non-exception mode
-	wsr		a2, ICOUNTLEVEL
-	movi	a2, 0xfffffffe
+	movi	a3, XCHAL_DEBUGLEVEL //Only count steps in non-debug mode
+	movi	a2, -2
+	wsr		a3, ICOUNTLEVEL
 	wsr		a2, ICOUNT
 	isync
 	ret

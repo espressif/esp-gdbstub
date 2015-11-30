@@ -116,6 +116,7 @@ static char chsum;						//Running checksum of the output packet
 static unsigned char obuf[OBUFLEN];		//GDB stdout buffer
 static int obufpos=0;					//Current position in the buffer
 #endif
+static int32_t singleStepPs=-1;			//Stores ps when single-stepping instruction. -1 when not in use.
 
 //Small function to feed the hardware watchdog. Needed to stop the ESP from resetting
 //due to a watchdog timeout while reading a command.
@@ -386,6 +387,11 @@ static int ATTR_GDBFN gdbHandleCommand(unsigned char *cmd, int len) {
 	} else if (strncmp((char*)cmd, "vCont;c", 7)==0 || cmd[0]=='c') {	//continue execution
 		return ST_CONT;
 	} else if (strncmp((char*)cmd, "vCont;s", 7)==0 || cmd[0]=='s') {	//single-step instruction
+		//Single-stepping can go wrong if an interrupt is pending, especially when it is e.g. a task switch:
+		//the ICOUNT register will overflow in the task switch code. That is why we disable interupts when
+		//doing single-instruction stepping.
+		singleStepPs=gdbstub_savedRegs.ps;
+		gdbstub_savedRegs.ps=(gdbstub_savedRegs.ps & ~0xf)|(XCHAL_DEBUGLEVEL-1);
 		gdbstub_icount_ena_single_step();
 		return ST_CONT;
 	} else if (cmd[0]=='q') {	//Extended query
@@ -560,6 +566,13 @@ static void ATTR_GDBFN emulLdSt() {
 //routine in gdbstub-entry.S
 void ATTR_GDBFN gdbstub_handle_debug_exception() {
 	ets_wdt_disable();
+
+	if (singleStepPs!=-1) {
+		//We come here after single-stepping an instruction. Interrupts are disabled
+		//for the single step. Re-enable them here.
+		gdbstub_savedRegs.ps=(gdbstub_savedRegs.ps&~0xf)|(singleStepPs&0xf);
+		singleStepPs=-1;
+	}
 
 	sendReason();
 	while(gdbReadCommand()!=ST_CONT);
