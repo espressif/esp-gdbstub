@@ -72,6 +72,7 @@ the xthal stack frame struct.
 
 void _xtos_set_exception_handler(int cause, void (exhandler)(struct XTensa_exception_frame_s *frame));
 int os_printf_plus(const char *format, ...)  __attribute__ ((format (printf, 1, 2)));
+void xthal_set_intenable(unsigned);
 
 #endif
 
@@ -575,6 +576,7 @@ void ATTR_GDBFN gdbstub_handle_debug_exception() {
 	}
 
 	sendReason();
+	xthal_set_intenable(0); // enable receiving UART bytes without interrupts
 	while(gdbReadCommand()!=ST_CONT);
 	if ((gdbstub_savedRegs.reason&0x84)==0x4) {
 		//We stopped due to a watchpoint. We can't re-execute the current instruction
@@ -627,6 +629,7 @@ static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *fr
 
 	ets_wdt_disable();
 	sendReason();
+	xthal_set_intenable(0); // enable receiving UART bytes without interrupts
 	while(gdbReadCommand()!=ST_CONT);
 	ets_wdt_enable();
 
@@ -706,6 +709,7 @@ static void ATTR_GDBFN uart_hdlr(void *arg, void *frame) {
 	
 		ets_wdt_disable();
 		sendReason();
+		xthal_set_intenable(0); // enable receiving UART bytes without interrupts
 		while(gdbReadCommand()!=ST_CONT);
 		ets_wdt_enable();
 		//Copy any changed registers back to the frame the Xtensa HAL uses.
