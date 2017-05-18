@@ -8,8 +8,8 @@
  *******************************************************************************/
 
 #include "gdbstub.h"
-#include "ets_sys.h"
-#include "eagle_soc.h"
+#include "espressif/esp8266/ets_sys.h"
+#include "espressif/esp8266/eagle_soc.h"
 #include "c_types.h"
 #include "gpio.h"
 #include "xtensa/corebits.h"
