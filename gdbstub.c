@@ -8,8 +8,8 @@
  *******************************************************************************/
 
 #include "gdbstub.h"
-#include "ets_sys.h"
-#include "eagle_soc.h"
+#include "espressif/esp8266/ets_sys.h"
+#include "espressif/esp8266/eagle_soc.h"
 #include "c_types.h"
 #include "gpio.h"
 #include "xtensa/corebits.h"
@@ -53,11 +53,10 @@ also sets up some function pointers for ROM functions that aren't in the FreeRTO
 */
 #include <string.h>
 #include <stdio.h>
-void _xt_isr_attach(int inum, void *fn);
-void _xt_isr_unmask(int inum);
-void os_install_putc1(void (*p)(char c));
-#define os_printf(...) printf(__VA_ARGS__)
-#define os_memcpy(a,b,c) memcpy(a,b,c)
+#include "freertos/portmacro.h"
+#include "esp_misc.h"
+#include "esp_system.h"
+
 typedef void wdtfntype();
 static wdtfntype *ets_wdt_disable=(wdtfntype *)0x400030f0;
 static wdtfntype *ets_wdt_enable=(wdtfntype *)0x40002fa0;
@@ -759,7 +758,7 @@ void ATTR_GDBFN gdbstub_handle_uart_int(struct XTensa_rtos_int_frame_s *frame) {
 }
 
 static void ATTR_GDBINIT install_uart_hdlr() {
-	_xt_isr_attach(ETS_UART_INUM, gdbstub_uart_entry);
+	_xt_isr_attach(ETS_UART_INUM, gdbstub_uart_entry, NULL);
 	SET_PERI_REG_MASK(UART_INT_ENA(0), UART_RXFIFO_FULL_INT_ENA|UART_RXFIFO_TOUT_INT_ENA);
 	_xt_isr_unmask((1<<ETS_UART_INUM)); //enable uart interrupt
 }
