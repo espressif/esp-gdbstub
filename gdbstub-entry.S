@@ -21,7 +21,6 @@
 .global gdbstub_savedRegs
 
 #if GDBSTUB_USE_OWN_STACK
-.global gdbstub_exceptionStack
 #endif
 
 	.text
@@ -51,6 +50,7 @@ This is the debugging exception routine; it's called by the debugging vector
 We arrive here with all regs intact except for a2. The old contents of A2 are saved 
 into the DEBUG_EXCSAVE special function register. EPC is the original PC.
 */
+.global gdbstub_debug_exception_entry
 gdbstub_debug_exception_entry:
 /*
 	//Minimum no-op debug exception handler, for debug
@@ -108,9 +108,9 @@ gdbstub_debug_exception_entry:
 	wsr		a3, ICOUNT
 noIcountReset:
 
-	rsr	a2, ps
+	rsr		a2, ps
 	addi	a2, a2, -PS_EXCM_MASK
-	wsr	a2, ps
+	wsr		a2, ps
 	rsync
 
 //Call into the C code to do the actual handling.
@@ -118,9 +118,9 @@ noIcountReset:
 
 DebugExceptionExit:
 
-	rsr	a2, ps
+	rsr		a2, ps
 	addi	a2, a2, PS_EXCM_MASK
-	wsr	a2, ps
+	wsr		a2, ps
 	rsync
 
 	//Restore registers from the gdbstub_savedRegs struct
@@ -156,9 +156,8 @@ DebugExceptionExit:
 	l32i	a1, a2, 0x58
 	l32i	a0, a2, 0x10
 
-	//Read back vector-saved a2 value, put back address of this routine.
-	movi	a2, gdbstub_debug_exception_entry
-	xsr	a2, DEBUG_EXCSAVE
+	//Read back vector-saved a2 value
+	rsr		a2, DEBUG_EXCSAVE
 
 	//All done. Return to where we came from.
 	rfi	XCHAL_DEBUGLEVEL
@@ -276,25 +275,6 @@ gdbstub_save_extra_sfrs_for_exception:
 	s32i	a3, a2, 0x5C
 	ret
 
-	.global gdbstub_init_debug_entry
-	.global _DebugExceptionVector
-	.align	4
-gdbstub_init_debug_entry:
-//This puts the following 2 instructions into the debug exception vector:
-//	xsr	a2, DEBUG_EXCSAVE
-//	jx	a2
-	movi	a2, _DebugExceptionVector
-	movi	a3, 0xa061d220
-	s32i	a3, a2, 0
-	movi	a3, 0x00000002
-	s32i	a3, a2, 4
-
-//Tell the just-installed debug vector where to go.
-	movi	a2, gdbstub_debug_exception_entry
-	wsr		a2, DEBUG_EXCSAVE
-
-	ret
-
 
 //Set up ICOUNT register to step one single instruction
 	.global gdbstub_icount_ena_single_step
@@ -402,5 +382,4 @@ gdbstub_do_break_breakpoint_addr:
 	l32i	a15, a1, 12
 	addi	a1, a1, 16
 	ret
-
 
