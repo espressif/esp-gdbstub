@@ -74,20 +74,20 @@ int os_printf_plus(const char *format, ...) __attribute__ ((format (printf, 1, 2
 #define EXCEPTION_GDB_SP_OFFSET 0x100
 
 //We need some UART register defines.
-#define ETS_UART_INUM 5
-#define REG_UART_BASE( i )  (0x60000000+(i)*0xf00)
-#define UART_STATUS( i )                        (REG_UART_BASE( i ) + 0x1C)
-#define UART_RXFIFO_CNT 0x000000FF
-#define UART_RXFIFO_CNT_S 0
-#define UART_TXFIFO_CNT 0x000000FF
-#define UART_TXFIFO_CNT_S                   16
-#define UART_FIFO( i )                          (REG_UART_BASE( i ) + 0x0)
-#define UART_INT_ENA(i)                     (REG_UART_BASE(i) + 0xC)
-#define UART_INT_CLR(i)                 (REG_UART_BASE(i) + 0x10)
-#define UART_RXFIFO_TOUT_INT_ENA            (BIT(8))
-#define UART_RXFIFO_FULL_INT_ENA            (BIT(0))
-#define UART_RXFIFO_TOUT_INT_CLR            (BIT(8))
-#define UART_RXFIFO_FULL_INT_CLR            (BIT(0))
+#define ETS_UART_INUM						5
+#define REG_UART_BASE( i )					(0x60000000+(i)*0xf00)
+#define UART_STATUS( i )					(REG_UART_BASE( i ) + 0x1C)
+#define UART_RXFIFO_CNT						0x000000FF
+#define UART_RXFIFO_CNT_S					0
+#define UART_TXFIFO_CNT						0x000000FF
+#define UART_TXFIFO_CNT_S					16
+#define UART_FIFO( i )						(REG_UART_BASE( i ) + 0x0)
+#define UART_INT_ENA(i)						(REG_UART_BASE(i) + 0xC)
+#define UART_INT_CLR(i)						(REG_UART_BASE(i) + 0x10)
+#define UART_RXFIFO_TOUT_INT_ENA			(BIT(8))
+#define UART_RXFIFO_FULL_INT_ENA			(BIT(0))
+#define UART_RXFIFO_TOUT_INT_CLR			(BIT(8))
+#define UART_RXFIFO_FULL_INT_CLR			(BIT(0))
 
 //Length of buffer used to reserve GDB commands. Has to be at least able to fit the G command, which
 //implies a minimum size of about 190 bytes.
@@ -106,7 +106,7 @@ static unsigned char cmd[PBUFLEN];			//GDB command input buffer
 static char chsum;							//Running checksum of the output packet
 #if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 static unsigned char obuf[OBUFLEN];			//GDB stdout buffer
-static int obufpos=0;						//Current position in the buffer
+static int obufpos = 0;						//Current position in the buffer
 #endif
 static int32_t singleStepPs = -1;			//Stores ps when single-stepping instruction. -1 when not in use.
 
@@ -679,15 +679,17 @@ static void ATTR_GDBFN gdb_exception_handler(struct XTensa_exception_frame_s *fr
 #if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 //Replacement putchar1 routine. Instead of spitting out the character directly, it will buffer up to
 //OBUFLEN characters (or up to a \n, whichever comes earlier) and send it out as a gdb stdout packet.
-static void ATTR_GDBFN gdb_semihost_putchar1(char c) {
+static void ATTR_GDBFN gdb_semihost_putchar1(char c)
+{
 	int i;
-	obuf[obufpos++]=c;
-	if (c=='\n' || obufpos==OBUFLEN) {
+	obuf[obufpos++] = c;
+	if (c == '\n' || obufpos == OBUFLEN) {
 		gdbPacketStart();
 		gdbPacketChar('O');
-		for (i=0; i<obufpos; i++) gdbPacketHex(obuf[i], 8);
+		for (i = 0; i < obufpos; i++)
+			gdbPacketHex(obuf[i], 8);
 		gdbPacketEnd();
-		obufpos=0;
+		obufpos = 0;
 	}
 }
 #endif
@@ -726,7 +728,7 @@ static void ATTR_GDBINIT install_exceptions()
 // Replace the FreeRTOS debug handler exception by our own
 static void ATTR_GDBINIT gdbstub_init_debug_entry()
 {
-	unsigned int *dv = (int *) _DebugExceptionVector;
+	unsigned int *dv = (unsigned int *) _DebugExceptionVector;
 	unsigned int jump;
 
 	// These 2 writes modify the instructions executed at debug interrupt vector
