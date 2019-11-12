@@ -376,7 +376,7 @@ gdbstub_do_break:
 	mov		a15, a1
 
 gdbstub_do_break_breakpoint_addr:
-	break 0,0
+	break 	0,0
 
 	mov		a1, a15
 	l32i	a15, a1, 12

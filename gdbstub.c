@@ -7,15 +7,17 @@
  * License: ESPRESSIF MIT License
  *******************************************************************************/
 
+#include <freertos/FreeRTOS.h>
+
 #include "gdbstub.h"
-#include "c_types.h"
-#include "espressif/esp8266/ets_sys.h"
-#include "espressif/esp8266/eagle_soc.h"
 #include "xtensa/corebits.h"
 #include "xtensa/config/core-isa.h"
 
 #include "gdbstub-entry.h"
 #include "gdbstub-cfg.h"
+
+#include "esp8266/rom_functions.h"
+#include "esp8266/uart_register.h"
 
 //From xtruntime-frames.h
 struct XTensa_exception_frame_s {
@@ -75,13 +77,10 @@ int os_printf_plus(const char *format, ...) __attribute__ ((format (printf, 1, 2
 
 //We need some UART register defines.
 #define ETS_UART_INUM						5
-#define REG_UART_BASE( i )					(0x60000000+(i)*0xf00)
-#define UART_STATUS( i )					(REG_UART_BASE( i ) + 0x1C)
 #define UART_RXFIFO_CNT						0x000000FF
 #define UART_RXFIFO_CNT_S					0
 #define UART_TXFIFO_CNT						0x000000FF
 #define UART_TXFIFO_CNT_S					16
-#define UART_FIFO( i )						(REG_UART_BASE( i ) + 0x0)
 #define UART_INT_ENA(i)						(REG_UART_BASE(i) + 0xC)
 #define UART_INT_CLR(i)						(REG_UART_BASE(i) + 0x10)
 #define UART_RXFIFO_TOUT_INT_ENA			(BIT(8))
@@ -420,8 +419,20 @@ static int ATTR_GDBFN gdbHandleCommand(unsigned char *cmd, int len)
 	} else if (cmd[0] == 'q') {	//Extended query
 		if (strncmp((char*) &cmd[1], "Supported", 9) == 0) { //Capabilities query
 			gdbPacketStart();
+//			gdbPacketStr("swbreak+;hwbreak+;PacketSize=255;qXfer:memory-map:read+");
 			gdbPacketStr("swbreak+;hwbreak+;PacketSize=255");
 			gdbPacketEnd();
+//		} else if (strncmp((char*) &cmd[1], "Xfer:memory-map:read", 20) == 0) { // Memory map query
+//			gdbPacketStart();
+//			gdbPacketStr("l ");
+//			gdbPacketStr("<memory-map>");
+//			gdbPacketStr("<memory type=\"ram\" start=\"0x40100000\" length=\"0x8000\"/>");
+//			gdbPacketStr("<memory type=\"ram\" start=\"0x40200000\" length=\"0x100000\"/>");
+////			gdbPacketStr("<memory type=\"flash\" start=\"0x40200000\" length=\"0x100000\">");
+////			gdbPacketStr("<property name=\"blocksize\">4096</property>");
+//			gdbPacketStr("</memory>");
+//			gdbPacketStr("</memory-map>");
+//			gdbPacketEnd();
 		} else {
 			//We don't support other queries.
 			gdbPacketStart();
@@ -564,7 +575,7 @@ static unsigned int ATTR_GDBFN getaregval(int reg)
 //Set the value of one of the A registers
 static void ATTR_GDBFN setaregval(int reg, unsigned int val)
 {
-	os_printf("%x -> %x\n", val, reg);
+	printf("%x -> %x\n", val, reg);
 	if (reg == 0)
 		gdbstub_savedRegs.a0 = val;
 	if (reg == 1)
@@ -600,13 +611,13 @@ static void ATTR_GDBFN emulLdSt()
 		*p = getaregval(i0 >> 4);
 		gdbstub_savedRegs.pc += 2;
 	} else {
-		os_printf("GDBSTUB: No l32i/s32i instruction: %x %x %x. Huh?", i2, i1, i0);
+		printf("GDBSTUB: No l32i/s32i instruction: %x %x %x. Huh?", i2, i1, i0);
 	}
 }
 
 //We just caught a debug exception and need to handle it. This is called from an assembly
 //routine in gdbstub-entry.S
-void ATTR_GDBFN gdbstub_handle_debug_exception()
+void ATTR_GDBFN IRAM_ATTR gdbstub_handle_debug_exception()
 {
 	ets_wdt_disable();
 
@@ -643,7 +654,7 @@ void ATTR_GDBFN gdbstub_handle_debug_exception()
 
 #if GDBSTUB_FREERTOS
 //Freetos exception. This routine is called by an assembly routine in gdbstub-entry.S
-void ATTR_GDBFN gdbstub_handle_user_exception()
+void ATTR_GDBFN IRAM_ATTR gdbstub_handle_user_exception()
 {
 	ets_wdt_disable();
 	gdbstub_savedRegs.reason |= 0x80; //mark as an exception reason
@@ -711,7 +722,7 @@ static void ATTR_GDBINIT install_exceptions() {
 //FreeRTOS doesn't use the Xtensa HAL for exceptions, but uses its own fatal exception handler.
 //We use a small hack to replace that with a jump to our own handler, which then has the task of
 //decyphering and re-instating the registers the FreeRTOS code left.
-extern void user_fatal_exception_handler();
+extern void _xt_ext_panic();
 extern void gdbstub_user_exception_entry();
 extern void gdbstub_debug_exception_entry();
 extern void _DebugExceptionVector();
@@ -719,9 +730,9 @@ extern void _DebugExceptionVector();
 static void ATTR_GDBINIT install_exceptions()
 {
 	//Replace the user_fatal_exception_handler by a jump to our own code
-	int *ufe = (int*) user_fatal_exception_handler;
+	int *ufe = (int*) _xt_ext_panic;
 	//This mess encodes as a relative jump instruction to user_fatal_exception_handler
-	*ufe = ((((int) gdbstub_user_exception_entry - (int) user_fatal_exception_handler) - 4) << 6) | 6;
+	*ufe = ((((int) gdbstub_user_exception_entry - (int) _xt_ext_panic) - 4) << 6) | 6;
 }
 #endif
 
@@ -827,18 +838,47 @@ void ATTR_GDBFN gdbstub_handle_uart_int(struct XTensa_rtos_int_frame_s *frame)
 
 static void ATTR_GDBINIT install_uart_hdlr()
 {
+	portENTER_CRITICAL();
+    _xt_isr_mask(1 << ETS_UART_INUM);
 	_xt_isr_attach(ETS_UART_INUM, gdbstub_uart_entry, NULL);
 	SET_PERI_REG_MASK(UART_INT_ENA(0), UART_RXFIFO_FULL_INT_ENA|UART_RXFIFO_TOUT_INT_ENA);
 	_xt_isr_unmask((1 << ETS_UART_INUM)); //enable uart interrupt
+	portEXIT_CRITICAL();
 }
 
 #endif
 
 #endif
 
+#define UART_CLKDIV_REG(X) UART_CLKDIV(X)
+#define UART_CLKDIV_M (UART_CLKDIV_CNT << UART_CLKDIV_S)
+
+static uint32_t get_new_uart_divider(uint32_t current_baud, uint32_t new_baud)
+{
+  uint32_t master_freq;
+  /* ESP32 has ROM code to detect the crystal freq but ESP8266 does not have this...
+     So instead we use the previously auto-synced 115200 baud rate (which we know
+     is correct wrt the relative crystal accuracy of the ESP & the USB/serial adapter).
+     From this we can estimate crystal freq, and update for a new baud rate relative to that.
+  */
+  uint32_t uart_reg = REG_READ(UART_CLKDIV(0));
+  uint32_t uart_div = uart_reg & (UART_CLKDIV_CNT << UART_CLKDIV_S);
+  master_freq = uart_div * current_baud;
+  return master_freq / new_baud;
+
+}
+
+#define BOOTLOADER_CONSOLE_CLK_FREQ 52 * 1000 * 1000
+
 //gdbstub initialization routine.
 void ATTR_GDBINIT gdbstub_init()
 {
+#if CONFIG_GDB_ENABLE
+	/* Set the baudrate to communicate with xtensa gdb */
+    uart_div_modify(CONFIG_CONSOLE_UART_NUM, get_new_uart_divider(CONFIG_CONSOLE_UART_BAUDRATE, CONFIG_GDB_BAUDRATE));
+    ets_delay_us(1000);
+
+
 #if GDBSTUB_REDIRECT_CONSOLE_OUTPUT
 	os_install_putc1(gdb_semihost_putchar1);
 #endif
@@ -849,6 +889,7 @@ void ATTR_GDBINIT gdbstub_init()
 	gdbstub_init_debug_entry();
 #if GDBSTUB_BREAK_ON_INIT
 	gdbstub_do_break();
+#endif
 #endif
 }
 
