@@ -5,3 +5,5 @@
 
 COMPONENT_EXTRA_CLEAN := gdbcmds
 
+$(call compile_only_if,$(CONFIG_GDB_ENABLE),gdbstub.o)
+$(call compile_only_if,$(CONFIG_GDB_ENABLE),gdbstub-entry.o)

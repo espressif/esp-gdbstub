@@ -31,9 +31,20 @@ Integration
 
 Usage with xtensa gdb
 -----
- * Include in your code a call to ``gdbstub_init()``
- * ``make flash``
- * ``make gdb``
+ * Include in your code these lines to enable gdb stub:
+
+		#include <gdbstub.h>
+		...
+		void IRAM_ATTR app_main() {		
+			...
+			#ifdef CONFIG_GDB_ENABLE
+				gdbstub_init()
+			#endif
+			...
+		}
+		
+ * Then ``make flash``
+ * Then ``make gdb``
  * The code will be stop inside function ``gdbstub_init()``, use n commands to step over.
  
 Usage with Eclipse
