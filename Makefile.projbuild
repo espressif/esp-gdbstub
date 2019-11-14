@@ -4,7 +4,9 @@ $(BUILD_DIR_BASE)/esp-gdbstub/gdbcmds: sdkconfig
 	@echo "set remote hardware-breakpoint-limit 2" > $@
 	@echo "set remote hardware-watchpoint-limit 2" >> $@
 #	@echo "set debug remote 1" >> $@
-#	@echo "mem 0x40100000 0x40110000 rw 8 nocache" >> $@
+	@echo "mem 0x3ffe8000 0x40000000 rw" >> $@
+	@echo "mem 0x40000000 0x40010000 ro" >> $@
+	@echo "mem 0x40100000 0x40110000 rw" >> $@
 	@echo "mem 0x40200000 0x40300000 ro" >> $@
 	@echo "target remote $(CONFIG_GDB_PORT)" >> $@
 

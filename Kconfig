@@ -16,7 +16,7 @@ config GDB_PORT
 choice GDB_BAUDRATE
 	depends on GDB_ENABLE
 	prompt "Default baud rate"
-	default GDB_BAUD_115200B
+	default GDB_BAUD_460800B
 	help
 		Baud rate used for communication between gdb (PC) and gdbstub (device). The
 		faster the more reactive the gdb interface will be.
