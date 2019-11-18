@@ -1,0 +1,37 @@
+menu "gdb"
+
+config GDB_ENABLE
+	bool "Enable GDB debugging"
+	default n
+	help
+	    Select this option to enable GDB debugging through serial port
+	    
+config GDB_PORT
+	depends on GDB_ENABLE
+	string "Default serial port"
+	default "/dev/ttyUSB0"
+	help
+		The serial port on your Linux PC that's connected to your device.
+
+choice GDB_BAUDRATE
+	depends on GDB_ENABLE
+	prompt "Default baud rate"
+	default GDB_BAUD_460800B
+	help
+		Baud rate used for communication between gdb (PC) and gdbstub (device). The
+		faster the more reactive the gdb interface will be.
+
+config GDB_BAUD_115200B
+	bool "115200 baud"
+config GDB_BAUD_230400B
+	bool "230400 baud"
+config GDB_BAUD_460800B
+	bool "460800 baud"
+endchoice
+
+config GDB_BAUDRATE
+	int
+	default 115200 if GDB_BAUD_115200B
+	default 230400 if GDB_BAUD_230400B
+	default 460800 if GDB_BAUD_460800B
+endmenu 

@@ -1,8 +1,6 @@
-file ../.output/eagle/debug/image/eagle.app.v6.out
-#set remotedebug 1
-set remotelogfile gdb_rsp_logfile.txt
-#set serial baud 115200
+file ./build/$(PROJECT_NAME).elf
+set serial baud $(CONFIG_GDB_BAUDRATE)
 set remote hardware-breakpoint-limit 1
 set remote hardware-watchpoint-limit 1
 #set debug xtensa 4
-target remote /dev/ttyUSB0
+target remote $(CONFIG_GDB_PORT)
